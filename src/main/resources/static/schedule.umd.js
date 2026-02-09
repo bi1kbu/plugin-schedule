@@ -521,16 +521,6 @@
             margin-top: 4px;
             font-weight: 600;
           }
-          .time {
-            color: #6b7280;
-            font-size: 12px;
-            margin-top: 4px;
-          }
-          .post {
-            color: #475569;
-            font-size: 12px;
-            margin-top: 4px;
-          }
           .empty {
             color: #64748b;
             margin-top: 8px;
@@ -586,11 +576,6 @@
               <div class="item${it.highlighted ? ' highlight' : ''}">
                 <div class="date">${it.startAt ? it.startAt.slice(0, 10) : ''}</div>
                 <div class="name">${it.title || '-'}</div>
-                <div class="time">
-                  ${it.startAt ? it.startAt.replace('T', ' ').slice(0, 16) : ''}
-                  ${it.endAt ? ` ~ ${it.endAt.replace('T', ' ').slice(0, 16)}` : ''}
-                </div>
-                <div class="post">${it.relatedPostTitleSnapshot || ''}</div>
               </div>
             `).join('')}
           </div>
