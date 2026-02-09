@@ -1,0 +1,46 @@
+apiVersion: v1alpha1
+kind: Role
+metadata:
+  name: role-template-schedule-view
+  labels:
+    halo.run/role-template: "true"
+  annotations:
+    rbac.authorization.halo.run/module: "日程"
+    rbac.authorization.halo.run/ui-permissions: '["plugin:schedule:view"]'
+    rbac.authorization.halo.run/display-name: "日程查看"
+rules:
+  - apiGroups: ["core.halo.run", "schedule.bi1kbu.com"]
+    resources: ["schedulecalendars", "scheduleevents"]
+    verbs: ["get", "list"]
+---
+apiVersion: v1alpha1
+kind: Role
+metadata:
+  name: role-template-schedule-manage
+  labels:
+    halo.run/role-template: "true"
+  annotations:
+    rbac.authorization.halo.run/dependencies: '["role-template-schedule-view"]'
+    rbac.authorization.halo.run/ui-permissions: '["plugin:schedule:manage"]'
+    rbac.authorization.halo.run/module: "日程"
+    rbac.authorization.halo.run/display-name: "日程管理"
+rules:
+  - apiGroups: ["core.halo.run", "api.schedule.bi1kbu.com", "schedule.bi1kbu.com"]
+    resources: ["schedulecalendars", "scheduleevents"]
+    verbs: ["create", "patch", "update", "delete", "deletecollection"]
+---
+apiVersion: v1alpha1
+kind: Role
+metadata:
+  name: schedule-public-apis
+  labels:
+    halo.run/role-template: "true"
+    halo.run/hidden: "true"
+    rbac.authorization.halo.run/aggregate-to-anonymous: "true"
+  annotations:
+    rbac.authorization.halo.run/module: "schedule Plugin Public"
+    rbac.authorization.halo.run/display-name: "schedule Plugin Public APIs"
+rules:
+  - apiGroups: ["api.schedule.bi1kbu.com"]
+    resources: ["scheduleevents", "schedulecalendars"]
+    verbs: ["get", "list"]
