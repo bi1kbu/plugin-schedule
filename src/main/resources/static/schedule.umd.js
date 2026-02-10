@@ -1085,7 +1085,7 @@
             </div>
           </div>
           <div class="card">
-            <button class="list-title-btn" id="upcomingReset" type="button">Upcoming</button>
+            <button class="list-title-btn" id="upcomingReset" type="button">近期日程</button>
             <div class="list-sub">${selectedDay ? `当前筛选：${selectedDay}` : `固定范围：${this.state.upcomingRangeText || '-'}`}</div>
             ${this.state.panelLoading ? '<div class="empty">加载中...</div>' : ''}
             ${!this.state.panelLoading && list.length === 0 ? '<div class="empty">暂无日程</div>' : ''}
