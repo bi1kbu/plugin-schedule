@@ -97,6 +97,8 @@ public class ScheduleCalendar extends AbstractExtension {
         private String rangeStartMonth;
         @Schema(description = "事件范围结束月份（YYYY-MM）")
         private String rangeEndMonth;
+        @Schema(description = "事件范围结束日期（YYYY-MM-DD）")
+        private String rangeEndDate;
 
         public Integer getEventCount() {
             return eventCount;
@@ -120,6 +122,14 @@ public class ScheduleCalendar extends AbstractExtension {
 
         public void setRangeEndMonth(String rangeEndMonth) {
             this.rangeEndMonth = rangeEndMonth;
+        }
+
+        public String getRangeEndDate() {
+            return rangeEndDate;
+        }
+
+        public void setRangeEndDate(String rangeEndDate) {
+            this.rangeEndDate = rangeEndDate;
         }
     }
 }

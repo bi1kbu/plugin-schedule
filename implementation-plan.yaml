@@ -742,3 +742,51 @@
       - "header-row 结构可见"
       - "页面无报错"
     备注: "已通过 `./gradlew.bat :ui:pnpmBuild`；代码检查确认 `新建/编辑日历` 卡片 header 已使用 `header-row` 包裹 `card-title`，模板编译正常且无页面报错。"
+
+  - 编号: M61
+    标记: 前台范围优化
+    标题: Upcoming 结束日期改为最晚日程日期
+    状态: 已完成
+    优先级: 高
+    描述: "将前台固定范围文案与查询结束时间从“今天+1年”改为“当前日历最晚日程日期”（有兜底）。"
+    交付物:
+      - "日历状态提供最晚日程日期字段"
+      - "前台读取静态最晚日期生成 Upcoming 范围"
+      - "缺省场景回落到现有默认策略"
+    备注: "已完成：后端状态新增 `rangeEndDate` 并在 refresh-stats 时按事件实际结束日期回写；前台 `schedule.umd.js` 已改为优先读取该静态字段生成 Upcoming 查询结束时间与“固定范围”结束日期，缺省时回落今天+1年。"
+
+  - 编号: M62
+    标记: 回归验收
+    标题: 构建与范围文案验证
+    状态: 已完成
+    优先级: 高
+    描述: "执行构建并验证固定范围结束日期按最晚日程日期展示。"
+    交付物:
+      - "gradlew build 通过"
+      - "固定范围结束日期非硬编码+1年"
+      - "无最晚日期时兜底行为正常"
+    备注: "已完成：`./gradlew.bat build` 通过；代码验证确认 Upcoming 结束日期优先取 `calendar.status.rangeEndDate`，并用于查询参数 `to` 与固定范围文案；当该字段缺失或异常时回退到“今天+1年”。"
+
+  - 编号: M63
+    标记: 环境同步
+    标题: 运行实例热更新与状态重算
+    状态: 已完成
+    优先级: 高
+    描述: "处理“代码已改但页面无变化”的运行态同步问题，确保插件热更新并重算日历状态。"
+    交付物:
+      - "reloadPlugin 执行成功"
+      - "refresh-stats 执行成功"
+      - "日历状态返回 rangeEndDate"
+    备注: "已完成：执行 `./gradlew.bat reloadPlugin` 成功；随后调用 `POST /apis/api.schedule.bi1kbu.com/v1alpha1/schedulecalendars/{name}/refresh-stats` 返回 200；再次查询日历列表确认 `status.rangeEndDate` 已出现（示例值 `2026-06-02`）。"
+
+  - 编号: M64
+    标记: 回归验收
+    标题: 运行态数据可见性验证
+    状态: 已完成
+    优先级: 中
+    描述: "验证运行中的公开接口已返回最新状态字段，确认前台可读取。"
+    交付物:
+      - "公开接口返回包含 rangeEndDate"
+      - "版本号递增确认状态已写回"
+      - "问题原因与操作步骤沉淀"
+    备注: "已完成：`GET /apis/api.schedule.bi1kbu.com/v1alpha1/schedulecalendars` 返回 `status.rangeEndDate`，并观察到 `metadata.version` 从 11 到 12，确认重算落盘已生效。"

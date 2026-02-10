@@ -187,6 +187,46 @@
       return `${year}-${String(month).padStart(2, '0')}`;
     }
 
+    resolveUpcomingRange(calendar, upcomingStart) {
+      const startText = this.formatDateKey(upcomingStart);
+      const fallbackEnd = new Date(upcomingStart.getTime());
+      fallbackEnd.setFullYear(fallbackEnd.getFullYear() + 1);
+      fallbackEnd.setHours(23, 59, 59, 999);
+
+      const rawRangeEndDate = typeof calendar?.status?.rangeEndDate === 'string'
+        ? calendar.status.rangeEndDate.trim()
+        : '';
+      if (!rawRangeEndDate) {
+        return {
+          endDate: fallbackEnd,
+          endText: this.formatDateKey(fallbackEnd),
+        };
+      }
+
+      const parsedEndDate = this.parseDateKeyAsUtc(rawRangeEndDate);
+      if (!parsedEndDate) {
+        return {
+          endDate: fallbackEnd,
+          endText: this.formatDateKey(fallbackEnd),
+        };
+      }
+
+      parsedEndDate.setUTCHours(23, 59, 59, 999);
+      if (parsedEndDate.getTime() < upcomingStart.getTime()) {
+        const clampedEnd = new Date(upcomingStart.getTime());
+        clampedEnd.setHours(23, 59, 59, 999);
+        return {
+          endDate: clampedEnd,
+          endText: startText,
+        };
+      }
+
+      return {
+        endDate: parsedEndDate,
+        endText: rawRangeEndDate,
+      };
+    }
+
     resolveMonthRangeFromCalendar(calendar) {
       const fallback = this.formatMonthKey(this.state.current);
       const parsedMin = this.parseMonthKey(calendar?.status?.rangeStartMonth);
@@ -407,39 +447,18 @@
       try {
         const shouldReloadCalendarMeta = this.state.loadedCalendarName !== calendarName;
         if (shouldReloadCalendarMeta) {
-          const upcomingStart = new Date();
-          upcomingStart.setHours(0, 0, 0, 0);
-          const upcomingEnd = new Date(upcomingStart.getTime());
-          upcomingEnd.setFullYear(upcomingEnd.getFullYear() + 1);
-          upcomingEnd.setHours(23, 59, 59, 999);
-          const upcomingEventsUrl =
-            `/apis/api.schedule.bi1kbu.com/v1alpha1/scheduleevents` +
-            `?calendar=${encodeURIComponent(calendarName)}` +
-            `&from=${encodeURIComponent(upcomingStart.toISOString())}` +
-            `&to=${encodeURIComponent(upcomingEnd.toISOString())}` +
-            `&size=1200`;
           const calendarsUrl = `/apis/api.schedule.bi1kbu.com/v1alpha1/schedulecalendars?page=1&size=300`;
-          const [upcomingResp, calendarsResp] = await Promise.all([
-            fetch(upcomingEventsUrl),
-            fetch(calendarsUrl),
-          ]);
+          const calendarsResp = await fetch(calendarsUrl);
           if (loadToken !== this.state.loadToken) {
             return;
-          }
-          if (!upcomingResp.ok) {
-            throw new Error(`加载 Upcoming 失败: ${upcomingResp.status}`);
           }
           if (!calendarsResp.ok) {
             throw new Error(`加载日历失败: ${calendarsResp.status}`);
           }
-          const [upcomingJson, calendarsJson] = await Promise.all([upcomingResp.json(), calendarsResp.json()]);
-          const mappedUpcoming = (upcomingJson.items || [])
-            .map((item) => this.mapEvent(item));
-          await this.hydrateEventPermalinks(mappedUpcoming);
+          const calendarsJson = await calendarsResp.json();
           if (loadToken !== this.state.loadToken) {
             return;
           }
-          this.state.upcomingEvents = this.sortEvents(mappedUpcoming);
 
           const calendars = calendarsJson.items || [];
           const matched = calendars.find((c) => c?.metadata?.name === calendarName);
@@ -448,10 +467,39 @@
           this.state.monthRangeMin = monthRange.min;
           this.state.monthRangeMax = monthRange.max;
           this.clampCurrentToMonthRange();
+
+          const upcomingStart = new Date();
+          upcomingStart.setHours(0, 0, 0, 0);
+          const upcomingRange = this.resolveUpcomingRange(matched, upcomingStart);
+          const upcomingEnd = upcomingRange.endDate;
+          const upcomingEventsUrl =
+            `/apis/api.schedule.bi1kbu.com/v1alpha1/scheduleevents` +
+            `?calendar=${encodeURIComponent(calendarName)}` +
+            `&from=${encodeURIComponent(upcomingStart.toISOString())}` +
+            `&to=${encodeURIComponent(upcomingEnd.toISOString())}` +
+            `&size=1200`;
+          const upcomingResp = await fetch(upcomingEventsUrl);
+          if (loadToken !== this.state.loadToken) {
+            return;
+          }
+          if (!upcomingResp.ok) {
+            throw new Error(`加载 Upcoming 失败: ${upcomingResp.status}`);
+          }
+          const upcomingJson = await upcomingResp.json();
+          if (loadToken !== this.state.loadToken) {
+            return;
+          }
+          const mappedUpcoming = (upcomingJson.items || [])
+            .map((item) => this.mapEvent(item));
+          await this.hydrateEventPermalinks(mappedUpcoming);
+          if (loadToken !== this.state.loadToken) {
+            return;
+          }
+          this.state.upcomingEvents = this.sortEvents(mappedUpcoming);
           this.state.loadedCalendarName = calendarName;
           this.state.selectedDay = null;
           this.state.panelEvents = this.state.upcomingEvents;
-          this.state.upcomingRangeText = `${this.formatDateKey(upcomingStart)} 至 ${this.formatDateKey(upcomingEnd)}`;
+          this.state.upcomingRangeText = `${this.formatDateKey(upcomingStart)} 至 ${upcomingRange.endText}`;
         } else if (!this.state.monthRangeMin || !this.state.monthRangeMax) {
           const currentMonth = this.formatMonthKey(this.state.current);
           this.state.monthRangeMin = currentMonth;

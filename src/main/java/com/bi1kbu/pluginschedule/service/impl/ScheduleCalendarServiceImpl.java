@@ -23,6 +23,7 @@ import run.halo.app.extension.ReactiveExtensionClient;
 public class ScheduleCalendarServiceImpl implements ScheduleCalendarService {
 
     private static final Pattern MONTH_KEY_PATTERN = Pattern.compile("\\d{4}-\\d{2}");
+    private static final Pattern DATE_KEY_PATTERN = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
 
     private final ReactiveExtensionClient client;
 
@@ -56,6 +57,7 @@ public class ScheduleCalendarServiceImpl implements ScheduleCalendarService {
                     status.setEventCount(stats.eventCount());
                     status.setRangeStartMonth(stats.rangeStartMonth());
                     status.setRangeEndMonth(stats.rangeEndMonth());
+                    status.setRangeEndDate(stats.rangeEndDate());
                     return client.update(calendar);
                 }));
     }
@@ -72,22 +74,39 @@ public class ScheduleCalendarServiceImpl implements ScheduleCalendarService {
     private CalendarStats calculateStatsFromEvents(List<ScheduleEvent> events) {
         String minMonth = null;
         String maxMonth = null;
+        String maxDate = null;
         for (ScheduleEvent event : events) {
             if (event == null || event.getSpec() == null) {
                 continue;
             }
-            String monthKey = extractMonthKey(event.getSpec().getStartAt());
-            if (monthKey == null) {
-                continue;
+            String startDateKey = extractDateKey(event.getSpec().getStartAt());
+            String endDateKey = extractDateKey(event.getSpec().getEndAt());
+            String effectiveStartDate = StringUtils.isNotBlank(startDateKey) ? startDateKey : endDateKey;
+            String effectiveEndDate = StringUtils.isNotBlank(endDateKey) ? endDateKey : startDateKey;
+            String startMonthKey = extractMonthKey(effectiveStartDate);
+            String endMonthKey = extractMonthKey(effectiveEndDate);
+            if (startMonthKey != null && (minMonth == null || startMonthKey.compareTo(minMonth) < 0)) {
+                minMonth = startMonthKey;
             }
-            if (minMonth == null || monthKey.compareTo(minMonth) < 0) {
-                minMonth = monthKey;
+            if (endMonthKey != null && (maxMonth == null || endMonthKey.compareTo(maxMonth) > 0)) {
+                maxMonth = endMonthKey;
             }
-            if (maxMonth == null || monthKey.compareTo(maxMonth) > 0) {
-                maxMonth = monthKey;
+            if (effectiveEndDate != null && (maxDate == null || effectiveEndDate.compareTo(maxDate) > 0)) {
+                maxDate = effectiveEndDate;
             }
         }
-        return new CalendarStats(events.size(), minMonth, maxMonth);
+        return new CalendarStats(events.size(), minMonth, maxMonth, maxDate);
+    }
+
+    private String extractDateKey(String dateTimeText) {
+        if (StringUtils.isBlank(dateTimeText) || dateTimeText.length() < 10) {
+            return null;
+        }
+        String dateKey = dateTimeText.substring(0, 10);
+        if (!DATE_KEY_PATTERN.matcher(dateKey).matches()) {
+            return null;
+        }
+        return dateKey;
     }
 
     private String extractMonthKey(String startAt) {
@@ -101,6 +120,7 @@ public class ScheduleCalendarServiceImpl implements ScheduleCalendarService {
         return monthKey;
     }
 
-    private record CalendarStats(int eventCount, String rangeStartMonth, String rangeEndMonth) {
+    private record CalendarStats(int eventCount, String rangeStartMonth, String rangeEndMonth,
+                                 String rangeEndDate) {
     }
 }
