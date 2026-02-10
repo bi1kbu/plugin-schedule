@@ -61,3 +61,8 @@ export async function listPosts(keyword = '') {
   })
   return data.items || []
 }
+
+export async function getPost(name: string) {
+  const { data } = await axiosInstance.get<Post>(`/apis/content.halo.run/v1alpha1/posts/${name}`)
+  return data
+}

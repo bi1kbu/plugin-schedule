@@ -55,11 +55,11 @@ export default definePlugin({
               loadingComponent: VLoading,
             }),
             meta: {
-              title: '日程事件',
+              title: '日程管理',
               searchable: true,
               permissions: ['plugin:schedule:view'],
               menu: {
-                name: '日程事件',
+                name: '日程管理',
                 icon: markRaw(RiCalendarTodoLine),
                 priority: 20,
               },

@@ -13,14 +13,24 @@ const calendarName = computed({
   },
 })
 
+const showTitle = computed({
+  get: () => props.node?.attrs.showTitle !== false,
+  set: (value: boolean) => {
+    props.updateAttributes({ showTitle: value })
+  },
+})
+
 const previewComponent = computed(() => {
   if (!calendarName.value) {
     return null
   }
   return h('schedule-view', {
     'calendar-name': calendarName.value,
+    'show-title': showTitle.value ? 'true' : 'false',
   })
 })
+
+const previewKey = computed(() => `${calendarName.value}-${showTitle.value ? '1' : '0'}`)
 </script>
 
 <template>
@@ -54,10 +64,15 @@ const previewComponent = computed(() => {
             input: 'schedule-calendar-select-input',
           }"
         />
+
+        <label class="show-title-switch">
+          <input v-model="showTitle" type="checkbox" />
+          <span>前台显示日历名称</span>
+        </label>
       </div>
     </div>
     <div class="schedule-view-preview">
-      <component v-if="calendarName" :is="previewComponent" :key="calendarName" />
+      <component v-if="calendarName" :is="previewComponent" :key="previewKey" />
       <VEmpty v-else title="未选择日历" message="请在上方选择一个日历" />
     </div>
   </NodeViewWrapper>
@@ -102,7 +117,10 @@ const previewComponent = computed(() => {
 }
 
 .schedule-view-nav-end {
-  min-width: 220px;
+  min-width: 260px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .schedule-view-preview {
@@ -121,5 +139,14 @@ const previewComponent = computed(() => {
 
 .schedule-calendar-select-input {
   font-size: 14px;
+}
+
+.show-title-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #334155;
+  font-size: 12px;
+  white-space: nowrap;
 }
 </style>

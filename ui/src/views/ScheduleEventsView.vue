@@ -1,11 +1,22 @@
 <script setup lang="ts">
-import { createEvent, deleteEvent, listCalendars, listEvents, listPosts, refreshCalendarStats, updateEvent } from '@/api/schedule'
+import { createEvent, deleteEvent, getPost, listCalendars, listEvents, listPosts, refreshCalendarStats, updateEvent } from '@/api/schedule'
 import type { Post, ScheduleCalendar, ScheduleEvent } from '@/types'
 import { Dialog, Toast, VButton, VCard } from '@halo-dev/components'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 type EditMode = 'create' | 'edit'
+type EventsTab = 'list' | 'create'
+type HighlightFilter = 'all' | 'highlighted' | 'normal'
+
+interface SessionCreatedEvent {
+  calendarDisplayName: string
+  title: string
+  startAt: string
+  endAt?: string
+  createdAt: string
+  highlightMode: string
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -13,23 +24,34 @@ const router = useRouter()
 const calendars = ref<ScheduleCalendar[]>([])
 const events = ref<ScheduleEvent[]>([])
 const posts = ref<Post[]>([])
+
 const loading = ref(false)
 const searchingPosts = ref(false)
 const saving = ref(false)
+
 const postKeyword = ref('')
+const sessionCreatedEvents = ref<SessionCreatedEvent[]>([])
 
 const mode = ref<EditMode>('create')
 const editingName = ref('')
+const editingVersion = ref<number | undefined>(undefined)
 const editingOriginalCalendarName = ref('')
 
 const selectedCalendar = computed(() => (route.query.calendar as string) || '')
-const selectedCalendarDisplayName = computed(() => {
-  const matched = calendars.value.find((c) => (c.metadata.name || '') === selectedCalendar.value)
-  return matched?.spec.displayName || selectedCalendar.value || '未选择日历'
+
+const activeTab = computed<EventsTab>(() => {
+  const tab = route.query.tab as string
+  return tab === 'create' ? 'create' : 'list'
+})
+
+const filters = reactive({
+  keyword: '',
+  highlight: 'all' as HighlightFilter,
+  fromDate: '',
+  toDate: '',
 })
 
 const form = reactive({
-  calendarName: '',
   title: '',
   startAt: '',
   endAt: '',
@@ -37,6 +59,7 @@ const form = reactive({
   status: 'published' as 'published' | 'cancelled',
   relatedPostName: '',
   relatedPostTitleSnapshot: '',
+  relatedPostPermalinkSnapshot: '',
   relatedPostPinnedSnapshot: false,
   forceHighlight: false,
   forceHideHighlight: false,
@@ -102,30 +125,137 @@ const toEndOfDayIso = (value: string) => {
 
 const displayDate = (value?: string) => formatDateInput(value) || '-'
 
-const detectPostPinned = (post?: Post) => {
-  if (!post) return false
+const resolvePostPinnedSnapshot = (post?: Post): boolean | undefined => {
+  if (!post) return undefined
   const specPinned = post.spec?.pinned
   if (typeof specPinned === 'boolean') return specPinned
   const statusPinned = post.status?.pinned
   if (typeof statusPinned === 'boolean') return statusPinned
   if (typeof post.spec?.topPriority === 'number') return post.spec.topPriority > 0
-  return false
+  return undefined
 }
 
-const highlightRuleText = computed(() => {
-  if (form.forceHighlight) return '强制突出显示'
-  if (form.forceHideHighlight) return '强制不突出显示'
-  return `跟随关联文章置顶属性（当前快照：${form.relatedPostPinnedSnapshot ? '置顶' : '非置顶/未知'}）`
-})
+const upsertPostOption = (post: Post) => {
+  const postName = post.metadata.name
+  const index = posts.value.findIndex((item) => item.metadata.name === postName)
+  if (index === -1) {
+    posts.value.unshift(post)
+    return
+  }
+  posts.value[index] = post
+}
+
+const syncRelatedPostSnapshot = async (options: { forceRemote?: boolean; silent?: boolean } = {}) => {
+  const selectedPostName = form.relatedPostName
+  if (!selectedPostName) {
+    form.relatedPostTitleSnapshot = ''
+    form.relatedPostPermalinkSnapshot = ''
+    form.relatedPostPinnedSnapshot = false
+    return
+  }
+
+  const localPost = postOptions.value.find((item) => item.metadata.name === selectedPostName)
+  if (localPost?.spec?.title) {
+    form.relatedPostTitleSnapshot = localPost.spec.title
+  }
+  const localPermalink = localPost?.status?.permalink
+  if (typeof localPermalink === 'string' && localPermalink.trim()) {
+    form.relatedPostPermalinkSnapshot = localPermalink
+  }
+  const localPinned = resolvePostPinnedSnapshot(localPost)
+  if (typeof localPinned === 'boolean') {
+    form.relatedPostPinnedSnapshot = localPinned
+  }
+
+  const shouldFetchRemote = options.forceRemote || !localPost || typeof localPinned !== 'boolean'
+  if (!shouldFetchRemote) {
+    return
+  }
+
+  try {
+    const remotePost = await getPost(selectedPostName)
+    upsertPostOption(remotePost)
+    if (form.relatedPostName !== selectedPostName) {
+      return
+    }
+    if (remotePost.spec?.title) {
+      form.relatedPostTitleSnapshot = remotePost.spec.title
+    }
+    form.relatedPostPermalinkSnapshot = remotePost.status?.permalink || form.relatedPostPermalinkSnapshot || ''
+    const remotePinned = resolvePostPinnedSnapshot(remotePost)
+    form.relatedPostPinnedSnapshot = remotePinned === true
+  } catch (e) {
+    console.error(e)
+    if (!options.silent) {
+      Toast.warning('刷新关联文章快照失败，已使用当前缓存数据')
+    }
+  }
+}
+
+const ensureTabQuery = async () => {
+  const tab = route.query.tab as string
+  if (tab === 'list' || tab === 'create') {
+    return
+  }
+  await router.replace({
+    path: route.path,
+    query: {
+      ...route.query,
+      tab: 'list',
+    },
+  })
+}
+
+const switchTab = async (tab: EventsTab) => {
+  if (tab === activeTab.value) {
+    return
+  }
+  await router.replace({
+    path: route.path,
+    query: {
+      ...route.query,
+      tab,
+    },
+  })
+}
+
+const openListTab = () => {
+  void switchTab('list')
+}
+
+const openCreateTab = () => {
+  if (mode.value === 'edit') {
+    resetForm()
+  }
+  void switchTab('create')
+}
+
+const changeSelectedCalendar = async (calendarName: string) => {
+  await router.replace({
+    path: route.path,
+    query: {
+      ...route.query,
+      calendar: calendarName,
+    },
+  })
+}
+
+const onCalendarSelect = async (event: Event) => {
+  const value = (event.target as HTMLSelectElement).value || ''
+  if (!value || value === selectedCalendar.value) {
+    return
+  }
+  await changeSelectedCalendar(value)
+}
 
 const fetchCalendars = async () => {
   const data = await listCalendars(1, 200)
   calendars.value = data.items || []
-  if (!selectedCalendar.value && calendars.value.length) {
-    await router.replace({
-      path: route.path,
-      query: { ...route.query, calendar: calendars.value[0].metadata.name || '' },
-    })
+
+  const selected = selectedCalendar.value
+  const hasSelected = calendars.value.some((item) => (item.metadata.name || '') === selected)
+  if ((!selected || !hasSelected) && calendars.value.length > 0) {
+    await changeSelectedCalendar(calendars.value[0].metadata.name || '')
   }
 }
 
@@ -163,11 +293,26 @@ const searchPosts = async () => {
   }
 }
 
+const postOptions = computed<Post[]>(() => {
+  const list = [...posts.value]
+  if (form.relatedPostName && !list.some((item) => item.metadata.name === form.relatedPostName)) {
+    list.unshift({
+      metadata: { name: form.relatedPostName },
+      spec: {
+        title: form.relatedPostTitleSnapshot || form.relatedPostName,
+        pinned: form.relatedPostPinnedSnapshot,
+      },
+    })
+  }
+  return list
+})
+
 const resetForm = () => {
   mode.value = 'create'
   editingName.value = ''
+  editingVersion.value = undefined
   editingOriginalCalendarName.value = ''
-  form.calendarName = selectedCalendar.value || ''
+
   form.title = ''
   form.startAt = ''
   form.endAt = ''
@@ -175,21 +320,21 @@ const resetForm = () => {
   form.status = 'published'
   form.relatedPostName = ''
   form.relatedPostTitleSnapshot = ''
+  form.relatedPostPermalinkSnapshot = ''
   form.relatedPostPinnedSnapshot = false
   form.forceHighlight = false
   form.forceHideHighlight = false
 }
 
-const onPostSelect = () => {
-  const post = posts.value.find((item) => item.metadata.name === form.relatedPostName)
-  form.relatedPostTitleSnapshot = post?.spec?.title || ''
-  form.relatedPostPinnedSnapshot = detectPostPinned(post)
+const clearFilters = () => {
+  filters.keyword = ''
+  filters.highlight = 'all'
+  filters.fromDate = ''
+  filters.toDate = ''
 }
 
-const clearPostBinding = () => {
-  form.relatedPostName = ''
-  form.relatedPostTitleSnapshot = ''
-  form.relatedPostPinnedSnapshot = false
+const onPostSelect = () => {
+  void syncRelatedPostSnapshot({ forceRemote: true, silent: true })
 }
 
 const onForceHighlightChange = () => {
@@ -213,43 +358,144 @@ const refreshCalendarStatsForNames = async (calendarNames: string[]) => {
   return results.every((item) => item.status === 'fulfilled')
 }
 
+const getCalendarDisplayName = (calendarName: string) => {
+  const calendar = calendars.value.find((item) => (item.metadata.name || '') === calendarName)
+  return calendar?.spec.displayName || calendarName || '-'
+}
+
+const isEventHighlighted = (event: ScheduleEvent) => {
+  if (event.spec.forceHighlight === true) {
+    return true
+  }
+  if (event.spec.forceHideHighlight === true) {
+    return false
+  }
+  return event.spec.relatedPostPinnedSnapshot === true
+}
+
+const renderHighlightMode = (event: ScheduleEvent) => {
+  if (event.spec.forceHighlight) return '强制突出'
+  if (event.spec.forceHideHighlight) return '强制不突出'
+  if (event.spec.relatedPostPinnedSnapshot === true) return '跟随文章置顶(是)'
+  return '跟随文章置顶(否/未知)'
+}
+
+const getEventStartDateKey = (event: ScheduleEvent) => {
+  const dateKey = formatDateInput(event.spec.startAt)
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateKey) ? dateKey : ''
+}
+
+const filteredEvents = computed(() => {
+  const keyword = filters.keyword.trim().toLowerCase()
+  return events.value.filter((item) => {
+    if (keyword) {
+      const title = (item.spec.title || '').toLowerCase()
+      if (!title.includes(keyword)) {
+        return false
+      }
+    }
+
+    if (filters.highlight === 'highlighted' && !isEventHighlighted(item)) {
+      return false
+    }
+    if (filters.highlight === 'normal' && isEventHighlighted(item)) {
+      return false
+    }
+
+    const startKey = getEventStartDateKey(item)
+    if (filters.fromDate && (!startKey || startKey < filters.fromDate)) {
+      return false
+    }
+    if (filters.toDate && (!startKey || startKey > filters.toDate)) {
+      return false
+    }
+
+    return true
+  })
+})
+
+const highlightRuleText = computed(() => {
+  if (form.forceHighlight) return '强制突出显示'
+  if (form.forceHideHighlight) return '强制不突出显示'
+  return `跟随关联文章置顶属性（当前快照：${form.relatedPostPinnedSnapshot ? '置顶' : '非置顶/未知'}）`
+})
+
+const resolveEventTitle = () => {
+  const direct = form.title.trim()
+  if (direct) {
+    return direct
+  }
+  const snapshotTitle = form.relatedPostTitleSnapshot.trim()
+  if (snapshotTitle) {
+    return snapshotTitle
+  }
+  const selectedPost = postOptions.value.find((item) => item.metadata.name === form.relatedPostName)
+  return selectedPost?.spec?.title?.trim() || ''
+}
+
+const appendSessionCreatedEvent = (event: ScheduleEvent) => {
+  const record: SessionCreatedEvent = {
+    calendarDisplayName: getCalendarDisplayName(event.spec.calendarName || ''),
+    title: event.spec.title || '-',
+    startAt: displayDate(event.spec.startAt),
+    endAt: displayDate(event.spec.endAt),
+    createdAt: new Date().toLocaleString(),
+    highlightMode: renderHighlightMode(event),
+  }
+  sessionCreatedEvents.value.unshift(record)
+}
+
 const submitForm = async () => {
-  if (!form.calendarName) {
-    Toast.warning('请选择日历')
+  const targetCalendarName = selectedCalendar.value
+  if (!targetCalendarName) {
+    Toast.warning('请先在右上角选择当前日历')
     return
   }
-  if (!form.title.trim()) {
-    Toast.warning('事件标题必填')
+  if (!form.relatedPostName) {
+    Toast.warning('关联文章必填')
     return
   }
   if (!form.startAt) {
     Toast.warning('开始日期必填')
     return
   }
+
   const startAtIso = toStartOfDayIso(form.startAt)
   if (!startAtIso) {
     Toast.warning('开始日期格式不正确')
     return
   }
+
   const endAtIso = form.endAt ? toEndOfDayIso(form.endAt) : ''
   if (form.endAt && !endAtIso) {
     Toast.warning('结束日期格式不正确')
     return
   }
 
+  await syncRelatedPostSnapshot({ forceRemote: true, silent: true })
+
+  const resolvedTitle = resolveEventTitle()
+  if (!resolvedTitle) {
+    Toast.warning('无法从关联文章中确定事件标题，请检查文章数据')
+    return
+  }
+
   const payload: ScheduleEvent = {
     apiVersion: 'schedule.bi1kbu.com/v1alpha1',
     kind: 'ScheduleEvent',
-    metadata: mode.value === 'create' ? { generateName: 'schedule-event-' } : { name: editingName.value },
+    metadata: mode.value === 'create'
+      ? { generateName: 'schedule-event-' }
+      : { name: editingName.value, version: editingVersion.value },
     spec: {
-      calendarName: form.calendarName,
-      title: form.title.trim(),
+      calendarName: targetCalendarName,
+      title: resolvedTitle,
       startAt: startAtIso,
       endAt: endAtIso || undefined,
       summary: form.summary.trim() || undefined,
       status: form.status,
-      relatedPostName: form.relatedPostName || undefined,
+      relatedPostName: form.relatedPostName,
       relatedPostTitleSnapshot: form.relatedPostTitleSnapshot || undefined,
+      relatedPostPermalinkSnapshot: form.relatedPostPermalinkSnapshot || undefined,
       relatedPostPinnedSnapshot: form.relatedPostPinnedSnapshot || undefined,
       forceHighlight: form.forceHighlight || undefined,
       forceHideHighlight: form.forceHideHighlight || undefined,
@@ -260,20 +506,23 @@ const submitForm = async () => {
   try {
     let statsRefreshed = true
     if (mode.value === 'create') {
-      await createEvent(payload)
-      statsRefreshed = await refreshCalendarStatsForNames([form.calendarName])
+      const created = await createEvent(payload)
+      appendSessionCreatedEvent(created)
+      statsRefreshed = await refreshCalendarStatsForNames([targetCalendarName])
       Toast.success('事件创建成功')
     } else {
       await updateEvent(editingName.value, payload)
       statsRefreshed = await refreshCalendarStatsForNames([
         editingOriginalCalendarName.value,
-        form.calendarName,
+        targetCalendarName,
       ])
       Toast.success('事件更新成功')
     }
+
     if (!statsRefreshed) {
       Toast.warning('事件已保存，但日历统计刷新失败，可稍后重试')
     }
+
     await fetchEvents()
     resetForm()
   } catch (e) {
@@ -287,8 +536,9 @@ const submitForm = async () => {
 const editOne = (item: ScheduleEvent) => {
   mode.value = 'edit'
   editingName.value = item.metadata.name || ''
+  editingVersion.value = item.metadata.version
   editingOriginalCalendarName.value = item.spec.calendarName || ''
-  form.calendarName = item.spec.calendarName || selectedCalendar.value || ''
+
   form.title = item.spec.title || ''
   form.startAt = formatDateInput(item.spec.startAt)
   form.endAt = formatDateInput(item.spec.endAt)
@@ -296,9 +546,13 @@ const editOne = (item: ScheduleEvent) => {
   form.status = item.spec.status || 'published'
   form.relatedPostName = item.spec.relatedPostName || ''
   form.relatedPostTitleSnapshot = item.spec.relatedPostTitleSnapshot || ''
+  form.relatedPostPermalinkSnapshot = item.spec.relatedPostPermalinkSnapshot || ''
   form.relatedPostPinnedSnapshot = item.spec.relatedPostPinnedSnapshot === true
   form.forceHighlight = item.spec.forceHighlight === true
   form.forceHideHighlight = item.spec.forceHideHighlight === true
+
+  void syncRelatedPostSnapshot({ forceRemote: true, silent: true })
+  void switchTab('create')
 }
 
 const removeOne = (event: ScheduleEvent) => {
@@ -326,23 +580,16 @@ const removeOne = (event: ScheduleEvent) => {
   })
 }
 
-const renderHighlightMode = (event: ScheduleEvent) => {
-  if (event.spec.forceHighlight) return '强制突出'
-  if (event.spec.forceHideHighlight) return '强制不突出'
-  if (event.spec.relatedPostPinnedSnapshot === true) return '跟随文章置顶(是)'
-  return '跟随文章置顶(否/未知)'
-}
-
 watch(
   () => selectedCalendar.value,
   async () => {
-    form.calendarName = selectedCalendar.value || ''
     await fetchEvents()
   }
 )
 
 onMounted(async () => {
   await fetchCalendars()
+  await ensureTabQuery()
   await fetchEvents()
   await searchPosts()
   resetForm()
@@ -351,20 +598,80 @@ onMounted(async () => {
 
 <template>
   <div class="page">
-    <div class="grid">
+    <div class="event-subnav">
+      <div class="subnav-left">
+        <button
+          type="button"
+          class="subnav-btn"
+          :class="{ active: activeTab === 'list' }"
+          @click="openListTab"
+        >
+          日程清单
+        </button>
+        <button
+          type="button"
+          class="subnav-btn"
+          :class="{ active: activeTab === 'create' }"
+          @click="openCreateTab"
+        >
+          新建日程
+        </button>
+      </div>
+
+      <div class="subnav-right">
+        <label class="calendar-label" for="eventCalendarSelect">当前日历</label>
+        <select
+          id="eventCalendarSelect"
+          class="calendar-select"
+          :value="selectedCalendar"
+          :disabled="calendars.length === 0"
+          @change="onCalendarSelect"
+        >
+          <option v-if="calendars.length === 0" value="">暂无日历</option>
+          <option v-for="calendar in calendars" :key="calendar.metadata.name" :value="calendar.metadata.name || ''">
+            {{ calendar.spec.displayName }}
+          </option>
+        </select>
+      </div>
+    </div>
+
+    <div v-if="activeTab === 'list'" class="panel-stack">
       <VCard>
         <template #header>
           <div class="header-row">
-            <div>
-              <div class="card-title">事件列表</div>
-              <div class="calendar-tip">当前日历：{{ selectedCalendarDisplayName }}</div>
-            </div>
-            <div class="actions">
-              <VButton @click="fetchEvents">刷新</VButton>
-              <VButton type="primary" @click="resetForm">新建事件</VButton>
-            </div>
+            <div class="card-title">日程清单</div>
           </div>
         </template>
+
+        <div class="list-filters">
+          <label class="field">
+            <span>标题</span>
+            <input v-model="filters.keyword" type="text" placeholder="按标题关键字筛选" />
+          </label>
+
+          <label class="field">
+            <span>突出显示</span>
+            <select v-model="filters.highlight">
+              <option value="all">全部</option>
+              <option value="highlighted">仅突出显示</option>
+              <option value="normal">仅非突出</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>开始日期从</span>
+            <input v-model="filters.fromDate" type="date" />
+          </label>
+
+          <label class="field">
+            <span>开始日期至</span>
+            <input v-model="filters.toDate" type="date" />
+          </label>
+
+          <div class="filter-actions">
+            <VButton size="sm" @click="clearFilters">清空筛选</VButton>
+          </div>
+        </div>
 
         <div class="table-wrap">
           <table class="table">
@@ -382,7 +689,10 @@ onMounted(async () => {
               <tr v-if="loading">
                 <td colspan="6">加载中...</td>
               </tr>
-              <tr v-for="item in events" :key="item.metadata.name">
+              <tr v-else-if="filteredEvents.length === 0">
+                <td colspan="6">暂无匹配日程</td>
+              </tr>
+              <tr v-for="item in filteredEvents" :key="item.metadata.name">
                 <td>{{ displayDate(item.spec.startAt) }}</td>
                 <td>{{ displayDate(item.spec.endAt) }}</td>
                 <td>{{ item.spec.title }}</td>
@@ -397,36 +707,43 @@ onMounted(async () => {
           </table>
         </div>
       </VCard>
+    </div>
 
+    <div v-else class="panel-stack create-stack">
       <VCard>
         <template #header>
-          <div class="card-title">{{ mode === 'create' ? '新建事件' : '编辑事件' }}</div>
+          <div class="header-row">
+            <div class="card-title">{{ mode === 'create' ? '新建日程' : '编辑日程' }}</div>
+          </div>
         </template>
 
         <div class="form">
           <div class="section">
+            <div class="section-title">关联文章（必填）</div>
+            <div class="post-search">
+              <input v-model="postKeyword" type="text" placeholder="输入关键词搜索文章" />
+              <VButton :loading="searchingPosts" @click="searchPosts">搜索</VButton>
+            </div>
+            <select v-model="form.relatedPostName" @change="onPostSelect">
+              <option value="">请选择关联文章</option>
+              <option v-for="post in postOptions" :key="post.metadata.name" :value="post.metadata.name">
+                {{ post.spec?.title || post.metadata.name }}
+              </option>
+            </select>
+            <div class="post-info">
+              <span>标题快照：{{ form.relatedPostTitleSnapshot || '-' }}</span>
+              <span>链接快照：{{ form.relatedPostPermalinkSnapshot || '-' }}</span>
+              <span>置顶快照：{{ form.relatedPostPinnedSnapshot ? '是' : '否/未知' }}</span>
+            </div>
+          </div>
+
+          <div class="section">
             <div class="section-title">基础信息</div>
             <div class="form-grid">
-              <label class="field">
-                <span>所属日历</span>
-                <select v-model="form.calendarName">
-                  <option v-for="calendar in calendars" :key="calendar.metadata.name" :value="calendar.metadata.name || ''">
-                    {{ calendar.spec.displayName }} ({{ calendar.metadata.name }})
-                  </option>
-                </select>
-              </label>
-
-              <label class="field">
-                <span>状态</span>
-                <select v-model="form.status">
-                  <option value="published">published</option>
-                  <option value="cancelled">cancelled</option>
-                </select>
-              </label>
 
               <label class="field field-full">
-                <span>事件标题（必填）</span>
-                <input v-model="form.title" type="text" placeholder="请输入事件标题" />
+                <span>事件标题</span>
+                <input v-model="form.title" type="text" placeholder="留空时默认使用关联文章标题" />
               </label>
 
               <label class="field">
@@ -443,25 +760,6 @@ onMounted(async () => {
                 <span>摘要</span>
                 <textarea v-model="form.summary" rows="3" placeholder="可选摘要"></textarea>
               </label>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="section-title">关联文章（手动）</div>
-            <div class="post-search">
-              <input v-model="postKeyword" type="text" placeholder="输入关键词搜索文章" />
-              <VButton :loading="searchingPosts" @click="searchPosts">搜索</VButton>
-            </div>
-            <select v-model="form.relatedPostName" @change="onPostSelect">
-              <option value="">不关联文章</option>
-              <option v-for="post in posts" :key="post.metadata.name" :value="post.metadata.name">
-                {{ post.spec?.title || post.metadata.name }}
-              </option>
-            </select>
-            <div class="post-info">
-              <span>标题快照：{{ form.relatedPostTitleSnapshot || '-' }}</span>
-              <span>置顶快照：{{ form.relatedPostPinnedSnapshot ? '是' : '否/未知' }}</span>
-              <VButton size="sm" @click="clearPostBinding">清空关联</VButton>
             </div>
           </div>
 
@@ -486,6 +784,45 @@ onMounted(async () => {
           </div>
         </div>
       </VCard>
+
+      <VCard>
+        <template #header>
+          <div class="header-row">
+            <div>
+              <div class="card-title">本次新建日程（临时）</div>
+              <div class="card-desc">仅显示当前页面会话中新建成功的记录，刷新页面后自动清空。</div>
+            </div>
+          </div>
+        </template>
+
+        <div class="table-wrap">
+          <table class="table temp-table">
+            <thead>
+              <tr>
+                <th>创建时间</th>
+                <th>开始日期</th>
+                <th>结束日期</th>
+                <th>标题</th>
+                <th>所属日历</th>
+                <th>突出显示</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="sessionCreatedEvents.length === 0">
+                <td colspan="6">当前会话暂无新建日程</td>
+              </tr>
+              <tr v-for="(item, index) in sessionCreatedEvents" :key="`${item.createdAt}-${item.title}-${index}`">
+                <td>{{ item.createdAt }}</td>
+                <td>{{ item.startAt }}</td>
+                <td>{{ item.endAt || '-' }}</td>
+                <td>{{ item.title }}</td>
+                <td>{{ item.calendarDisplayName }}</td>
+                <td>{{ item.highlightMode }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </VCard>
     </div>
   </div>
 </template>
@@ -495,34 +832,93 @@ onMounted(async () => {
   padding-top: 12px;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+.event-subnav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.subnav-left {
+  display: flex;
+  gap: 8px;
+}
+
+.subnav-btn {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: #374151;
+}
+
+.subnav-btn.active {
+  border-color: #2563eb;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.subnav-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.calendar-select {
+  min-width: 220px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 10px;
+  font-size: 14px;
+  color: #111827;
+}
+
+.panel-stack {
+  display: flex;
+  flex-direction: column;
   gap: 14px;
-  align-items: start;
+}
+
+.create-stack {
+  gap: 12px;
 }
 
 .header-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
 }
 
 .card-title {
   font-size: 16px;
   font-weight: 600;
+  line-height: 1.5;
+  margin: 2px 0;
+  display: inline-flex;
+  align-items: center;
 }
 
-.calendar-tip {
+.card-desc {
   color: #6b7280;
   font-size: 12px;
   margin-top: 4px;
 }
 
-.actions {
-  display: flex;
-  gap: 8px;
+.list-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .table-wrap {
@@ -554,6 +950,10 @@ onMounted(async () => {
 
 .table tbody tr:hover {
   background: #f8fafc;
+}
+
+.temp-table {
+  min-width: 840px;
 }
 
 .row-actions {
@@ -609,6 +1009,11 @@ onMounted(async () => {
   background: #fff;
 }
 
+.filter-actions {
+  display: flex;
+  align-items: flex-end;
+}
+
 .post-search {
   display: flex;
   gap: 8px;
@@ -648,14 +1053,34 @@ onMounted(async () => {
 }
 
 @media (max-width: 1280px) {
-  .grid {
-    grid-template-columns: 1fr;
+  .list-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .table {
+    min-width: 680px;
+  }
+
+  .temp-table {
+    min-width: 760px;
   }
 }
 
 @media (max-width: 768px) {
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .list-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .subnav-right {
+    width: 100%;
+  }
+
+  .calendar-select {
+    width: 100%;
   }
 }
 </style>

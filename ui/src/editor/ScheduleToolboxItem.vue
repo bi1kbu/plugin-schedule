@@ -7,7 +7,7 @@ import RiCalendarEventLine from '~icons/ri/calendar-event-line?width=1.2em&heigh
 const props = defineProps<{ editor: Editor }>()
 
 const insertBlock = () => {
-  props.editor.chain().focus().setScheduleView({ calendarName: '' }).run()
+  props.editor.chain().focus().setScheduleView({ calendarName: '', showTitle: true }).run()
 }
 </script>
 

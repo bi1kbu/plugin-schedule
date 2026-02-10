@@ -18,7 +18,7 @@ import { deleteNode } from '@/utils/delete-node'
 declare module '@halo-dev/richtext-editor' {
   interface Commands<ReturnType> {
     'schedule-view': {
-      setScheduleView: (options: { calendarName?: string }) => ReturnType
+      setScheduleView: (options: { calendarName?: string; showTitle?: boolean }) => ReturnType
     }
   }
 }
@@ -42,6 +42,19 @@ const ScheduleExtension = Node.create({
           }
         },
       },
+      showTitle: {
+        default: true,
+        parseHTML: (element: HTMLElement) => {
+          const raw = element.getAttribute('show-title')
+          if (raw === null) {
+            return true
+          }
+          return !['false', '0', 'off', 'no'].includes(raw.trim().toLowerCase())
+        },
+        renderHTML: (attributes: { showTitle?: boolean }) => ({
+          'show-title': attributes.showTitle === false ? 'false' : 'true',
+        }),
+      },
     }
   },
 
@@ -56,7 +69,7 @@ const ScheduleExtension = Node.create({
   addCommands() {
     return {
       setScheduleView:
-        (options: { calendarName?: string }) =>
+        (options: { calendarName?: string; showTitle?: boolean }) =>
         ({ commands }: { commands: any }) => {
           return commands.insertContent({
             type: this.name,
@@ -88,7 +101,7 @@ const ScheduleExtension = Node.create({
           title: '日程组件',
           keywords: ['schedule', 'calendar', '日程', '日历'],
           command: ({ editor, range }: { editor: Editor; range: Range }) => {
-            editor.chain().focus().setScheduleView({}).deleteRange(range).run()
+            editor.chain().focus().setScheduleView({ showTitle: true }).deleteRange(range).run()
           },
         }
       },

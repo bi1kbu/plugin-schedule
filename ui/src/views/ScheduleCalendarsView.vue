@@ -16,9 +16,6 @@ const editingVersion = ref<number | undefined>(undefined)
 
 const form = reactive({
   displayName: '',
-  themeColor: '#1d4ed8',
-  visible: true,
-  showCalendarTitle: true,
 })
 
 const getRangeText = (calendar: ScheduleCalendar) => {
@@ -51,9 +48,6 @@ const resetForm = () => {
   editingName.value = ''
   editingVersion.value = undefined
   form.displayName = ''
-  form.themeColor = '#1d4ed8'
-  form.visible = true
-  form.showCalendarTitle = true
 }
 
 const editOne = (calendar: ScheduleCalendar) => {
@@ -61,9 +55,6 @@ const editOne = (calendar: ScheduleCalendar) => {
   editingName.value = calendar.metadata.name || ''
   editingVersion.value = calendar.metadata.version
   form.displayName = calendar.spec.displayName || ''
-  form.themeColor = calendar.spec.themeColor || '#1d4ed8'
-  form.visible = calendar.spec.visible !== false
-  form.showCalendarTitle = calendar.spec.showCalendarTitle !== false
 }
 
 const submitForm = async () => {
@@ -80,9 +71,6 @@ const submitForm = async () => {
       : { name: editingName.value, version: editingVersion.value },
     spec: {
       displayName: form.displayName.trim(),
-      themeColor: form.themeColor.trim() || '#1d4ed8',
-      visible: form.visible,
-      showCalendarTitle: form.showCalendarTitle,
     },
   }
 
@@ -139,7 +127,7 @@ onMounted(fetchCalendars)
               <div class="card-title">日历列表</div>
               <div class="card-desc">用于前台展示和事件归属管理</div>
             </div>
-            <div class="actions">
+            <div class="header-actions">
               <VButton @click="fetchCalendars">刷新</VButton>
               <VButton type="primary" @click="resetForm">新建日历</VButton>
             </div>
@@ -189,24 +177,6 @@ onMounted(fetchCalendars)
               <span>日历名称（必填）</span>
               <input v-model="form.displayName" type="text" placeholder="例如：社团活动日历" />
             </label>
-
-            <label class="field">
-              <span>主题色</span>
-              <input v-model="form.themeColor" type="color" />
-            </label>
-          </div>
-
-          <div class="section">
-            <div class="section-title">展示设置</div>
-            <label class="checkbox-field">
-              <input v-model="form.visible" type="checkbox" />
-              <span>公开展示</span>
-            </label>
-
-            <label class="checkbox-field">
-              <input v-model="form.showCalendarTitle" type="checkbox" />
-              <span>前台显示日历名称</span>
-            </label>
           </div>
 
           <div class="form-actions">
@@ -236,24 +206,29 @@ onMounted(fetchCalendars)
 .header-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .card-title {
   font-size: 16px;
   font-weight: 600;
+  line-height: 1.5;
+  margin: 2px 0;
+  display: inline-flex;
+  align-items: center;
 }
 
 .card-desc {
   margin-top: 4px;
   font-size: 12px;
   color: #6b7280;
-}
-
-.actions {
-  display: flex;
-  gap: 8px;
 }
 
 .table-wrap {
@@ -336,17 +311,6 @@ onMounted(fetchCalendars)
   border-radius: 6px;
   padding: 8px 10px;
   background: #fff;
-}
-
-.field input[type='color'] {
-  padding: 0;
-  height: 36px;
-}
-
-.checkbox-field {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .form-actions {

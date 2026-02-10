@@ -55,6 +55,9 @@ public class ScheduleEvent extends AbstractExtension {
         @Schema(description = "关联文章标题快照")
         private String relatedPostTitleSnapshot;
 
+        @Schema(description = "关联文章链接快照")
+        private String relatedPostPermalinkSnapshot;
+
         @Schema(description = "关联文章置顶快照")
         private Boolean relatedPostPinnedSnapshot;
 
@@ -142,6 +145,14 @@ public class ScheduleEvent extends AbstractExtension {
 
         public void setRelatedPostTitleSnapshot(String relatedPostTitleSnapshot) {
             this.relatedPostTitleSnapshot = relatedPostTitleSnapshot;
+        }
+
+        public String getRelatedPostPermalinkSnapshot() {
+            return relatedPostPermalinkSnapshot;
+        }
+
+        public void setRelatedPostPermalinkSnapshot(String relatedPostPermalinkSnapshot) {
+            this.relatedPostPermalinkSnapshot = relatedPostPermalinkSnapshot;
         }
 
         public Boolean getRelatedPostPinnedSnapshot() {

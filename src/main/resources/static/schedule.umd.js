@@ -20,6 +20,7 @@
         monthPanelOpen: false,
         monthRangeMin: '',
         monthRangeMax: '',
+        postPermalinkCache: {},
       };
       this.onWheel = this.onWheel.bind(this);
       this.onDocumentClick = this.onDocumentClick.bind(this);
@@ -27,7 +28,7 @@
     }
 
     static get observedAttributes() {
-      return ['calendar-name'];
+      return ['calendar-name', 'show-title'];
     }
 
     connectedCallback() {
@@ -41,6 +42,11 @@
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
+      if (name === 'show-title' && oldValue !== newValue) {
+        this.state.showCalendarTitle = this.resolveShowTitleFromAttr();
+        this.render();
+        return;
+      }
       if (name === 'calendar-name' && oldValue !== newValue) {
         this.state.selectedDay = null;
         this.state.panelEvents = [];
@@ -49,12 +55,116 @@
       }
     }
 
+    resolveShowTitleFromAttr() {
+      const raw = this.getAttribute('show-title');
+      if (raw === null) {
+        return true;
+      }
+      const normalized = String(raw).trim().toLowerCase();
+      return !['false', '0', 'off', 'no'].includes(normalized);
+    }
+
     formatDateKey(date) {
       return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     }
 
+    formatDateKeyUtc(date) {
+      return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+    }
+
+    extractDateKeyFromIso(isoString) {
+      if (typeof isoString !== 'string') {
+        return '';
+      }
+      const head = isoString.slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(head)) {
+        return head;
+      }
+      const date = new Date(isoString);
+      if (Number.isNaN(date.getTime())) {
+        return '';
+      }
+      return this.formatDateKeyUtc(date);
+    }
+
+    parseDateKeyAsUtc(dateKey) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+        return null;
+      }
+      const [y, m, d] = dateKey.split('-').map((part) => Number(part));
+      if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) {
+        return null;
+      }
+      const date = new Date(Date.UTC(y, m - 1, d));
+      if (
+        date.getUTCFullYear() !== y
+        || date.getUTCMonth() !== m - 1
+        || date.getUTCDate() !== d
+      ) {
+        return null;
+      }
+      return date;
+    }
+
+    getEventDateKeys(event) {
+      const startKey = this.extractDateKeyFromIso(event?.startAt);
+      if (!startKey) {
+        return [];
+      }
+
+      const endKeyRaw = this.extractDateKeyFromIso(event?.endAt);
+      const endKey = endKeyRaw || startKey;
+
+      const startDate = this.parseDateKeyAsUtc(startKey);
+      const endDate = this.parseDateKeyAsUtc(endKey);
+      if (!startDate || !endDate) {
+        return [startKey];
+      }
+
+      let rangeStart = startDate;
+      let rangeEnd = endDate;
+      if (rangeEnd.getTime() < rangeStart.getTime()) {
+        rangeEnd = rangeStart;
+      }
+
+      const keys = [];
+      const cursor = new Date(rangeStart.getTime());
+      let guard = 0;
+      while (cursor.getTime() <= rangeEnd.getTime() && guard < 740) {
+        keys.push(this.formatDateKeyUtc(cursor));
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+        guard += 1;
+      }
+
+      return keys.length > 0 ? keys : [startKey];
+    }
+
     formatMonthKey(date) {
       return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    normalizePermalink(value) {
+      const raw = String(value || '').trim();
+      if (!raw) {
+        return '';
+      }
+      if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('//')) {
+        return raw;
+      }
+      return raw.startsWith('/') ? raw : `/${raw}`;
+    }
+
+    hasPermalinkCache(name) {
+      return Object.prototype.hasOwnProperty.call(this.state.postPermalinkCache, name);
     }
 
     parseMonthKey(monthKey) {
@@ -196,7 +306,9 @@
         title: spec.title || '',
         startAt: spec.startAt || '',
         endAt: spec.endAt || '',
+        relatedPostName: spec.relatedPostName || '',
         relatedPostTitleSnapshot: spec.relatedPostTitleSnapshot || '',
+        relatedPostPermalinkSnapshot: this.normalizePermalink(spec.relatedPostPermalinkSnapshot || ''),
         summary: spec.summary || '',
         highlighted,
       };
@@ -222,8 +334,54 @@
       return events.slice().sort((a, b) => (a.startAt || '').localeCompare(b.startAt || ''));
     }
 
+    async hydrateEventPermalinks(events) {
+      if (!Array.isArray(events) || events.length === 0) {
+        return;
+      }
+
+      const missingNames = [];
+      for (const ev of events) {
+        if (!ev || !ev.relatedPostName || ev.relatedPostPermalinkSnapshot) {
+          continue;
+        }
+        const cached = this.state.postPermalinkCache[ev.relatedPostName];
+        if (this.hasPermalinkCache(ev.relatedPostName)) {
+          ev.relatedPostPermalinkSnapshot = this.normalizePermalink(cached);
+          continue;
+        }
+        if (!missingNames.includes(ev.relatedPostName)) {
+          missingNames.push(ev.relatedPostName);
+        }
+      }
+
+      if (missingNames.length > 0) {
+        await Promise.all(missingNames.map(async (postName) => {
+          try {
+            const resp = await fetch(`/apis/content.halo.run/v1alpha1/posts/${encodeURIComponent(postName)}`);
+            if (!resp.ok) {
+              this.state.postPermalinkCache[postName] = '';
+              return;
+            }
+            const post = await resp.json();
+            this.state.postPermalinkCache[postName] = this.normalizePermalink(post?.status?.permalink || '');
+          } catch (e) {
+            console.error(e);
+            this.state.postPermalinkCache[postName] = '';
+          }
+        }));
+      }
+
+      for (const ev of events) {
+        if (!ev || ev.relatedPostPermalinkSnapshot || !ev.relatedPostName) {
+          continue;
+        }
+        ev.relatedPostPermalinkSnapshot = this.normalizePermalink(this.state.postPermalinkCache[ev.relatedPostName] || '');
+      }
+    }
+
     async loadData() {
       const calendarName = this.getAttribute('calendar-name');
+      this.state.showCalendarTitle = this.resolveShowTitleFromAttr();
       if (!calendarName) {
         const currentMonth = this.formatMonthKey(this.state.current);
         this.state.events = [];
@@ -231,7 +389,7 @@
         this.state.panelEvents = [];
         this.state.panelLoading = false;
         this.state.calendarTitle = '日程';
-        this.state.showCalendarTitle = true;
+        this.state.showCalendarTitle = this.resolveShowTitleFromAttr();
         this.state.upcomingRangeText = '';
         this.state.loadedCalendarName = '';
         this.state.monthRangeMin = currentMonth;
@@ -275,13 +433,17 @@
             throw new Error(`加载日历失败: ${calendarsResp.status}`);
           }
           const [upcomingJson, calendarsJson] = await Promise.all([upcomingResp.json(), calendarsResp.json()]);
-          this.state.upcomingEvents = this.sortEvents((upcomingJson.items || [])
-            .map((item) => this.mapEvent(item)));
+          const mappedUpcoming = (upcomingJson.items || [])
+            .map((item) => this.mapEvent(item));
+          await this.hydrateEventPermalinks(mappedUpcoming);
+          if (loadToken !== this.state.loadToken) {
+            return;
+          }
+          this.state.upcomingEvents = this.sortEvents(mappedUpcoming);
 
           const calendars = calendarsJson.items || [];
           const matched = calendars.find((c) => c?.metadata?.name === calendarName);
           this.state.calendarTitle = matched?.spec?.displayName || calendarName;
-          this.state.showCalendarTitle = matched?.spec?.showCalendarTitle !== false;
           const monthRange = this.resolveMonthRangeFromCalendar(matched);
           this.state.monthRangeMin = monthRange.min;
           this.state.monthRangeMax = monthRange.max;
@@ -301,7 +463,9 @@
         windowEnd.setHours(23, 59, 59, 999);
         const from = windowStart.toISOString();
         const to = windowEnd.toISOString();
-        this.state.events = await this.fetchEvents(calendarName, from, to, 600);
+        const rangeEvents = await this.fetchEvents(calendarName, from, to, 600);
+        await this.hydrateEventPermalinks(rangeEvents);
+        this.state.events = rangeEvents;
         if (loadToken !== this.state.loadToken) {
           return;
         }
@@ -317,7 +481,7 @@
         this.state.monthRangeMin = currentMonth;
         this.state.monthRangeMax = currentMonth;
         this.state.calendarTitle = calendarName;
-        this.state.showCalendarTitle = true;
+        this.state.showCalendarTitle = this.resolveShowTitleFromAttr();
       } finally {
         if (loadToken === this.state.loadToken) {
           this.render();
@@ -421,14 +585,16 @@
     getEventsByDay() {
       const map = new Map();
       for (const ev of this.state.events) {
-        if (!ev.startAt) {
+        const dateKeys = this.getEventDateKeys(ev);
+        if (dateKeys.length === 0) {
           continue;
         }
-        const key = ev.startAt.slice(0, 10);
-        if (!map.has(key)) {
-          map.set(key, []);
+        for (const key of dateKeys) {
+          if (!map.has(key)) {
+            map.set(key, []);
+          }
+          map.get(key).push(ev);
         }
-        map.get(key).push(ev);
       }
       return map;
     }
@@ -450,6 +616,7 @@
       this.render();
       try {
         const events = await this.fetchEvents(calendarName, dayStart.toISOString(), dayEnd.toISOString(), 200);
+        await this.hydrateEventPermalinks(events);
         if (panelLoadToken !== this.state.panelLoadToken) {
           return;
         }
@@ -779,9 +946,23 @@
             padding: 12px;
             margin-top: 10px;
           }
+          .item-link {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+            cursor: pointer;
+          }
+          .item-link:hover {
+            border-color: #60a5fa;
+            box-shadow: 0 3px 10px rgba(37, 99, 235, 0.12);
+          }
           .item.highlight {
             border-color: #fdba74;
             background: #fff7ed;
+          }
+          .item-link.highlight:hover {
+            border-color: #fb923c;
+            box-shadow: 0 3px 10px rgba(245, 158, 11, 0.16);
           }
           .date {
             color: #64748b;
@@ -860,12 +1041,20 @@
             <div class="list-sub">${selectedDay ? `当前筛选：${selectedDay}` : `固定范围：${this.state.upcomingRangeText || '-'}`}</div>
             ${this.state.panelLoading ? '<div class="empty">加载中...</div>' : ''}
             ${!this.state.panelLoading && list.length === 0 ? '<div class="empty">暂无日程</div>' : ''}
-            ${list.map((it) => `
-              <div class="item${it.highlighted ? ' highlight' : ''}">
-                <div class="date">${it.startAt ? it.startAt.slice(0, 10) : ''}</div>
-                <div class="name">${it.title || '-'}</div>
-              </div>
-            `).join('')}
+            ${list.map((it) => {
+              const itemClass = `item${it.highlighted ? ' highlight' : ''}`;
+              const dateText = this.escapeHtml(it.startAt ? it.startAt.slice(0, 10) : '');
+              const titleText = this.escapeHtml(it.title || '-');
+              const body = `
+                <div class="date">${dateText}</div>
+                <div class="name">${titleText}</div>
+              `;
+              if (it.relatedPostPermalinkSnapshot) {
+                const href = this.escapeHtml(this.normalizePermalink(it.relatedPostPermalinkSnapshot));
+                return `<a class="${itemClass} item-link" href="${href}">${body}</a>`;
+              }
+              return `<div class="${itemClass}">${body}</div>`;
+            }).join('')}
           </div>
         </div>
       `;

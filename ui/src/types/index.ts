@@ -38,6 +38,7 @@ export interface ScheduleEvent {
     status?: 'published' | 'cancelled'
     relatedPostName?: string
     relatedPostTitleSnapshot?: string
+    relatedPostPermalinkSnapshot?: string
     relatedPostPinnedSnapshot?: boolean
     forceHighlight?: boolean
     forceHideHighlight?: boolean

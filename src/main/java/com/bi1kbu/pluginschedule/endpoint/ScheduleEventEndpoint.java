@@ -78,6 +78,7 @@ public class ScheduleEventEndpoint implements CustomEndpoint {
         ScheduleEventQuery query = new ScheduleEventQuery(request.exchange());
         return scheduleEventService.listEvents(query)
             .flatMap(events -> Flux.fromStream(events.get())
+                .filter(this::notDeleting)
                 .filter(event -> inTimeRange(event, from, to))
                 .collectList()
                 .flatMap(items -> ServerResponse.ok().bodyValue(
@@ -97,6 +98,7 @@ public class ScheduleEventEndpoint implements CustomEndpoint {
         ScheduleEventQuery query = new ScheduleEventQuery(request.exchange());
         return scheduleEventService.listEvents(query)
             .flatMap(events -> Flux.fromStream(events.get())
+                .filter(this::notDeleting)
                 .filter(event -> inTimeRange(event, from, to))
                 .collectList()
                 .flatMap(items -> ServerResponse.ok().bodyValue(
@@ -104,12 +106,20 @@ public class ScheduleEventEndpoint implements CustomEndpoint {
                 )));
     }
 
+    private boolean notDeleting(ScheduleEvent event) {
+        return event.getMetadata() == null || event.getMetadata().getDeletionTimestamp() == null;
+    }
+
     private boolean inTimeRange(ScheduleEvent event, String from, String to) {
         String startAt = event.getSpec() != null ? event.getSpec().getStartAt() : null;
         if (StringUtils.isBlank(startAt)) {
             return false;
         }
-        if (StringUtils.isNotBlank(from) && startAt.compareTo(from) < 0) {
+
+        String endAt = event.getSpec() != null ? event.getSpec().getEndAt() : null;
+        String effectiveEndAt = StringUtils.isNotBlank(endAt) ? endAt : startAt;
+
+        if (StringUtils.isNotBlank(from) && effectiveEndAt.compareTo(from) < 0) {
             return false;
         }
         if (StringUtils.isNotBlank(to) && startAt.compareTo(to) > 0) {
