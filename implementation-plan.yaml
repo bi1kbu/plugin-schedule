@@ -694,3 +694,51 @@
       - "Upcoming 点击可跳转文章"
       - "跨天日程在范围内连续显示"
     备注: "已通过 `gradlew build reloadPlugin`；Chrome MCP 验证：Upcoming 中存在文章链接卡片（如 `/archives/hello-halo`）并点击后页面跳转到文章；跨天事件 `2026-06-01~2026-06-02` 在 6/1 与 6/2 天格均有事件标记，点击 6/2 请求按天范围时仍返回该事件（后端重叠过滤生效）。"
+
+  - 编号: M57
+    标记: 视觉优化
+    标题: 后台 header-row 边距调整
+    状态: 已完成
+    优先级: 中
+    描述: "为各模块卡片头部的 header-row 增加上/左边距，优化贴边显示问题。"
+    交付物:
+      - "日历配置页 header-row 增加边距"
+      - "日程管理页 header-row 增加边距"
+      - "标题与操作区域对齐保持正常"
+    备注: "已完成：`ScheduleCalendarsView` 与 `ScheduleEventsView` 的 `.header-row` 增加统一内边距（上/左方向明显增距），头部标题与操作按钮对齐保持正常。"
+
+  - 编号: M58
+    标记: 回归验收
+    标题: 样式构建与页面检查
+    状态: 已完成
+    优先级: 中
+    描述: "执行前端构建并检查 header-row 边距视觉效果。"
+    交付物:
+      - "前端构建通过"
+      - "header-row 上/左边距生效"
+      - "无布局错位回归"
+    备注: "已通过 `./gradlew.bat :ui:pnpmBuild` 与 `./gradlew.bat reloadPlugin`；Chrome MCP 在 `日程管理` 与 `日历配置` 页面实测 `.header-row` 计算样式为 `padding: 6px 4px 2px 8px`，上/左边距已生效且标题/按钮对齐正常。"
+
+  - 编号: M59
+    标记: 结构统一
+    标题: 日历配置新建卡片标题包裹 header-row
+    状态: 已完成
+    优先级: 中
+    描述: "为 日程→日历配置→新建日历 卡片标题补齐 header-row 包裹，统一头部结构与外边距。"
+    交付物:
+      - "新建日历卡片 header 使用 header-row"
+      - "card-title 保持现有文案与逻辑"
+      - "样式结构与其他卡片一致"
+    备注: "已完成：`ScheduleCalendarsView` 第二张卡片（新建/编辑日历）header 已改为 `header-row` 包裹 `card-title`，与同页其他卡片头部结构保持一致。"
+
+  - 编号: M60
+    标记: 回归验收
+    标题: 模板与构建验证
+    状态: 已完成
+    优先级: 中
+    描述: "执行前端构建并确认 header-row 包裹结构生效且无回归。"
+    交付物:
+      - "前端构建通过"
+      - "header-row 结构可见"
+      - "页面无报错"
+    备注: "已通过 `./gradlew.bat :ui:pnpmBuild`；代码检查确认 `新建/编辑日历` 卡片 header 已使用 `header-row` 包裹 `card-title`，模板编译正常且无页面报错。"

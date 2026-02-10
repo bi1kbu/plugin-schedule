@@ -167,7 +167,9 @@ onMounted(fetchCalendars)
 
       <VCard>
         <template #header>
-          <div class="card-title">{{ mode === 'create' ? '新建日历' : '编辑日历' }}</div>
+          <div class="header-row">
+            <div class="card-title">{{ mode === 'create' ? '新建日历' : '编辑日历' }}</div>
+          </div>
         </template>
 
         <div class="form">
@@ -208,6 +210,7 @@ onMounted(fetchCalendars)
   justify-content: space-between;
   align-items: center;
   gap: 10px;
+  padding: 16px 4px 2px 16px;
 }
 
 .header-actions {

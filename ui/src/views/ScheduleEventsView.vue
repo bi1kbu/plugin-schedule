@@ -897,6 +897,7 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   gap: 10px;
+  padding: 6px 4px 2px 8px;
 }
 
 .card-title {
