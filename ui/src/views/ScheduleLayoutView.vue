@@ -77,30 +77,36 @@ watch(
   <div class="layout-page">
     <VCard>
       <div class="layout-toolbar">
-        <div class="layout-tabs">
-          <VButton :type="activePath.includes('/schedule/calendars') ? 'primary' : 'default'" @click="jumpTo('calendars')">
-            日历配置
-          </VButton>
-          <VButton :type="activePath.includes('/schedule/events') ? 'primary' : 'default'" @click="jumpTo('events')">
-            日程事件
-          </VButton>
+        <div class="toolbar-block">
+          <div class="block-title">功能导航</div>
+          <div class="layout-tabs">
+            <VButton :type="activePath.includes('/schedule/calendars') ? 'primary' : 'default'" @click="jumpTo('calendars')">
+              日历配置
+            </VButton>
+            <VButton :type="activePath.includes('/schedule/events') ? 'primary' : 'default'" @click="jumpTo('events')">
+              日程事件
+            </VButton>
+          </div>
         </div>
-        <div class="calendar-switch">
-          <span class="label">当前日历：</span>
-          <span v-if="loading">加载中...</span>
-          <template v-else-if="calendars.length">
-            <button
-              v-for="calendar in calendars"
-              :key="calendar.metadata.name"
-              type="button"
-              class="calendar-chip"
-              :class="{ active: selectedCalendar === (calendar.metadata.name || '') }"
-              @click="switchCalendar(calendar.metadata.name || '')"
-            >
-              {{ calendar.spec.displayName }}
-            </button>
-          </template>
-          <span v-else>暂无日历，请先在“日历配置”中创建</span>
+
+        <div class="toolbar-block calendar-switch">
+          <div class="block-title">当前日历</div>
+          <div class="calendar-switch-content">
+            <span v-if="loading">加载中...</span>
+            <template v-else-if="calendars.length">
+              <button
+                v-for="calendar in calendars"
+                :key="calendar.metadata.name"
+                type="button"
+                class="calendar-chip"
+                :class="{ active: selectedCalendar === (calendar.metadata.name || '') }"
+                @click="switchCalendar(calendar.metadata.name || '')"
+              >
+                {{ calendar.spec.displayName }}
+              </button>
+            </template>
+            <span v-else>暂无日历，请先在“日历配置”中创建</span>
+          </div>
         </div>
       </div>
     </VCard>
@@ -119,17 +125,34 @@ watch(
 .layout-toolbar {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: stretch;
   gap: 16px;
   flex-wrap: wrap;
+}
+
+.toolbar-block {
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.block-title {
+  font-size: 12px;
+  color: #6b7280;
 }
 
 .layout-tabs {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .calendar-switch {
+  flex: 1;
+}
+
+.calendar-switch-content {
   display: flex;
   align-items: center;
   flex-wrap: wrap;

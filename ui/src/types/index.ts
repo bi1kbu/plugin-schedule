@@ -1,6 +1,8 @@
 export interface Metadata {
   name?: string
   generateName?: string
+  version?: number
+  creationTimestamp?: string
   deletionTimestamp?: string
 }
 
@@ -10,12 +12,14 @@ export interface ScheduleCalendar {
   metadata: Metadata
   spec: {
     displayName: string
-    slug?: string
     themeColor?: string
     visible?: boolean
+    showCalendarTitle?: boolean
   }
   status?: {
     eventCount?: number
+    rangeStartMonth?: string
+    rangeEndMonth?: string
   }
 }
 

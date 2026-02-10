@@ -11,13 +11,19 @@
         current: new Date(),
         selectedDay: null,
         calendarTitle: '日程',
+        showCalendarTitle: true,
         wheelLockedUntil: 0,
         upcomingRangeText: '',
         loadedCalendarName: '',
         loadToken: 0,
         panelLoadToken: 0,
+        monthPanelOpen: false,
+        monthRangeMin: '',
+        monthRangeMax: '',
       };
       this.onWheel = this.onWheel.bind(this);
+      this.onDocumentClick = this.onDocumentClick.bind(this);
+      this.onDocumentKeydown = this.onDocumentKeydown.bind(this);
     }
 
     static get observedAttributes() {
@@ -27,6 +33,11 @@
     connectedCallback() {
       this.render();
       this.loadData();
+    }
+
+    disconnectedCallback() {
+      document.removeEventListener('click', this.onDocumentClick, true);
+      document.removeEventListener('keydown', this.onDocumentKeydown, true);
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
@@ -42,8 +53,123 @@
       return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     }
 
-    toMonthInputValue(date) {
+    formatMonthKey(date) {
       return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    parseMonthKey(monthKey) {
+      if (typeof monthKey !== 'string') {
+        return null;
+      }
+      const parts = monthKey.split('-');
+      if (parts.length !== 2) {
+        return null;
+      }
+      const year = Number(parts[0]);
+      const month = Number(parts[1]);
+      if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+        return null;
+      }
+      return { year, month };
+    }
+
+    toMonthKey(year, month) {
+      return `${year}-${String(month).padStart(2, '0')}`;
+    }
+
+    resolveMonthRangeFromCalendar(calendar) {
+      const fallback = this.formatMonthKey(this.state.current);
+      const parsedMin = this.parseMonthKey(calendar?.status?.rangeStartMonth);
+      const parsedMax = this.parseMonthKey(calendar?.status?.rangeEndMonth);
+      if (parsedMin && parsedMax) {
+        if (
+          parsedMin.year < parsedMax.year
+          || (parsedMin.year === parsedMax.year && parsedMin.month <= parsedMax.month)
+        ) {
+          return {
+            min: this.toMonthKey(parsedMin.year, parsedMin.month),
+            max: this.toMonthKey(parsedMax.year, parsedMax.month),
+          };
+        }
+        return {
+          min: this.toMonthKey(parsedMax.year, parsedMax.month),
+          max: this.toMonthKey(parsedMin.year, parsedMin.month),
+        };
+      }
+      if (parsedMin) {
+        const monthKey = this.toMonthKey(parsedMin.year, parsedMin.month);
+        return { min: monthKey, max: monthKey };
+      }
+      if (parsedMax) {
+        const monthKey = this.toMonthKey(parsedMax.year, parsedMax.month);
+        return { min: monthKey, max: monthKey };
+      }
+      return { min: fallback, max: fallback };
+    }
+
+    getMonthRangeBounds() {
+      const fallback = this.parseMonthKey(this.formatMonthKey(this.state.current));
+      const parsedMin = this.parseMonthKey(this.state.monthRangeMin) || fallback;
+      const parsedMax = this.parseMonthKey(this.state.monthRangeMax) || fallback;
+      if (
+        parsedMin.year < parsedMax.year
+        || (parsedMin.year === parsedMax.year && parsedMin.month <= parsedMax.month)
+      ) {
+        return {
+          minYear: parsedMin.year,
+          minMonth: parsedMin.month,
+          maxYear: parsedMax.year,
+          maxMonth: parsedMax.month,
+        };
+      }
+      return {
+        minYear: parsedMax.year,
+        minMonth: parsedMax.month,
+        maxYear: parsedMin.year,
+        maxMonth: parsedMin.month,
+      };
+    }
+
+    clampYearMonthToRange(year, month, bounds) {
+      let nextYear = year;
+      let nextMonth = month;
+      if (nextYear < bounds.minYear) {
+        nextYear = bounds.minYear;
+        nextMonth = bounds.minMonth;
+      } else if (nextYear > bounds.maxYear) {
+        nextYear = bounds.maxYear;
+        nextMonth = bounds.maxMonth;
+      }
+      if (nextYear === bounds.minYear && nextMonth < bounds.minMonth) {
+        nextMonth = bounds.minMonth;
+      }
+      if (nextYear === bounds.maxYear && nextMonth > bounds.maxMonth) {
+        nextMonth = bounds.maxMonth;
+      }
+      return { year: nextYear, month: nextMonth };
+    }
+
+    getMonthRangeForYear(year, bounds) {
+      let start = 1;
+      let end = 12;
+      if (year === bounds.minYear) {
+        start = bounds.minMonth;
+      }
+      if (year === bounds.maxYear) {
+        end = bounds.maxMonth;
+      }
+      if (start > end) {
+        return { start: bounds.minMonth, end: bounds.minMonth };
+      }
+      return { start, end };
+    }
+
+    clampCurrentToMonthRange() {
+      const bounds = this.getMonthRangeBounds();
+      const currentYear = this.state.current.getFullYear();
+      const currentMonth = this.state.current.getMonth() + 1;
+      const clamped = this.clampYearMonthToRange(currentYear, currentMonth, bounds);
+      this.state.current = new Date(clamped.year, clamped.month - 1, 1);
     }
 
     addDays(date, days) {
@@ -76,13 +202,14 @@
       };
     }
 
-    async fetchEvents(calendarName, from, to, size) {
+    async fetchEvents(calendarName, from, to, size, page = 1) {
       const eventsUrl =
         `/apis/api.schedule.bi1kbu.com/v1alpha1/scheduleevents` +
-        `?calendar=${encodeURIComponent(calendarName)}` +
+        `?page=${page}` +
+        `&size=${size}` +
+        `&calendar=${encodeURIComponent(calendarName)}` +
         `&from=${encodeURIComponent(from)}` +
-        `&to=${encodeURIComponent(to)}` +
-        `&size=${size}`;
+        `&to=${encodeURIComponent(to)}`;
       const resp = await fetch(eventsUrl);
       if (!resp.ok) {
         throw new Error(`加载事件失败: ${resp.status}`);
@@ -98,13 +225,18 @@
     async loadData() {
       const calendarName = this.getAttribute('calendar-name');
       if (!calendarName) {
+        const currentMonth = this.formatMonthKey(this.state.current);
         this.state.events = [];
         this.state.upcomingEvents = [];
         this.state.panelEvents = [];
         this.state.panelLoading = false;
         this.state.calendarTitle = '日程';
+        this.state.showCalendarTitle = true;
         this.state.upcomingRangeText = '';
         this.state.loadedCalendarName = '';
+        this.state.monthRangeMin = currentMonth;
+        this.state.monthRangeMax = currentMonth;
+        this.state.monthPanelOpen = false;
         this.render();
         return;
       }
@@ -112,20 +244,11 @@
       const loadToken = this.state.loadToken + 1;
       this.state.loadToken = loadToken;
 
-      const windowStart = this.getWeekStart(this.state.current);
-      const windowEnd = this.addDays(windowStart, 41);
-      windowEnd.setHours(23, 59, 59, 999);
-      const from = windowStart.toISOString();
-      const to = windowEnd.toISOString();
-
       this.render();
 
       try {
-        const visibleEventsTask = this.fetchEvents(calendarName, from, to, 600);
-        const tasks = [visibleEventsTask];
-        let shouldReloadCalendarMeta = false;
-        if (this.state.loadedCalendarName !== calendarName) {
-          shouldReloadCalendarMeta = true;
+        const shouldReloadCalendarMeta = this.state.loadedCalendarName !== calendarName;
+        if (shouldReloadCalendarMeta) {
           const upcomingStart = new Date();
           upcomingStart.setHours(0, 0, 0, 0);
           const upcomingEnd = new Date(upcomingStart.getTime());
@@ -138,20 +261,13 @@
             `&to=${encodeURIComponent(upcomingEnd.toISOString())}` +
             `&size=1200`;
           const calendarsUrl = `/apis/api.schedule.bi1kbu.com/v1alpha1/schedulecalendars?page=1&size=300`;
-          tasks.push(fetch(upcomingEventsUrl), fetch(calendarsUrl));
-          this.state.upcomingRangeText = `${this.formatDateKey(upcomingStart)} 至 ${this.formatDateKey(upcomingEnd)}`;
-        }
-
-        const responses = await Promise.all(tasks);
-        if (loadToken !== this.state.loadToken) {
-          return;
-        }
-
-        this.state.events = responses[0];
-
-        if (shouldReloadCalendarMeta) {
-          const upcomingResp = responses[1];
-          const calendarsResp = responses[2];
+          const [upcomingResp, calendarsResp] = await Promise.all([
+            fetch(upcomingEventsUrl),
+            fetch(calendarsUrl),
+          ]);
+          if (loadToken !== this.state.loadToken) {
+            return;
+          }
           if (!upcomingResp.ok) {
             throw new Error(`加载 Upcoming 失败: ${upcomingResp.status}`);
           }
@@ -165,9 +281,29 @@
           const calendars = calendarsJson.items || [];
           const matched = calendars.find((c) => c?.metadata?.name === calendarName);
           this.state.calendarTitle = matched?.spec?.displayName || calendarName;
+          this.state.showCalendarTitle = matched?.spec?.showCalendarTitle !== false;
+          const monthRange = this.resolveMonthRangeFromCalendar(matched);
+          this.state.monthRangeMin = monthRange.min;
+          this.state.monthRangeMax = monthRange.max;
+          this.clampCurrentToMonthRange();
           this.state.loadedCalendarName = calendarName;
           this.state.selectedDay = null;
           this.state.panelEvents = this.state.upcomingEvents;
+          this.state.upcomingRangeText = `${this.formatDateKey(upcomingStart)} 至 ${this.formatDateKey(upcomingEnd)}`;
+        } else if (!this.state.monthRangeMin || !this.state.monthRangeMax) {
+          const currentMonth = this.formatMonthKey(this.state.current);
+          this.state.monthRangeMin = currentMonth;
+          this.state.monthRangeMax = currentMonth;
+        }
+
+        const windowStart = this.getWeekStart(this.state.current);
+        const windowEnd = this.addDays(windowStart, 41);
+        windowEnd.setHours(23, 59, 59, 999);
+        const from = windowStart.toISOString();
+        const to = windowEnd.toISOString();
+        this.state.events = await this.fetchEvents(calendarName, from, to, 600);
+        if (loadToken !== this.state.loadToken) {
+          return;
         }
       } catch (e) {
         console.error(e);
@@ -177,7 +313,11 @@
           this.state.panelEvents = [];
           this.state.upcomingRangeText = '';
         }
+        const currentMonth = this.formatMonthKey(this.state.current);
+        this.state.monthRangeMin = currentMonth;
+        this.state.monthRangeMax = currentMonth;
         this.state.calendarTitle = calendarName;
+        this.state.showCalendarTitle = true;
       } finally {
         if (loadToken === this.state.loadToken) {
           this.render();
@@ -226,20 +366,56 @@
       this.refreshPanelByDay(dayKey);
     }
 
-    openMonthPicker(monthPicker) {
-      if (!monthPicker) {
+    setMonthPanelOpen(open) {
+      if (this.state.monthPanelOpen === open) {
         return;
       }
-      try {
-        if (typeof monthPicker.showPicker === 'function') {
-          monthPicker.showPicker();
-          return;
-        }
-      } catch (e) {
-        console.debug(e);
+      this.state.monthPanelOpen = open;
+      if (open) {
+        document.addEventListener('click', this.onDocumentClick, true);
+        document.addEventListener('keydown', this.onDocumentKeydown, true);
+      } else {
+        document.removeEventListener('click', this.onDocumentClick, true);
+        document.removeEventListener('keydown', this.onDocumentKeydown, true);
       }
-      monthPicker.focus();
-      monthPicker.click();
+      this.render();
+    }
+
+    toggleMonthPanel() {
+      this.setMonthPanelOpen(!this.state.monthPanelOpen);
+    }
+
+    onDocumentClick(event) {
+      if (!this.state.monthPanelOpen || !this.shadowRoot) {
+        return;
+      }
+      const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+      if (path.includes(this)) {
+        return;
+      }
+      if (event.target instanceof Node && this.shadowRoot.contains(event.target)) {
+        return;
+      }
+      this.setMonthPanelOpen(false);
+    }
+
+    onDocumentKeydown(event) {
+      if (event.key === 'Escape') {
+        this.setMonthPanelOpen(false);
+      }
+    }
+
+    applyMonthSelection(yearValue, monthValue) {
+      const y = Number(yearValue);
+      const m = Number(monthValue);
+      if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) {
+        this.setMonthPanelOpen(false);
+        return;
+      }
+      const bounds = this.getMonthRangeBounds();
+      const clamped = this.clampYearMonthToRange(y, m, bounds);
+      this.setMonthPanelOpen(false);
+      this.jumpToMonth(`${clamped.year}-${String(clamped.month).padStart(2, '0')}`);
     }
 
     getEventsByDay() {
@@ -350,7 +526,19 @@
       }
 
       const monthText = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const monthValue = month + 1;
       const todayKey = this.formatDateKey(new Date());
+      const monthRangeBounds = this.getMonthRangeBounds();
+      const pickerValue = this.clampYearMonthToRange(year, monthValue, monthRangeBounds);
+      const monthRangeForPickerYear = this.getMonthRangeForYear(pickerValue.year, monthRangeBounds);
+      const yearOptions = [];
+      for (let y = monthRangeBounds.minYear; y <= monthRangeBounds.maxYear; y += 1) {
+        yearOptions.push(`<option value="${y}"${y === pickerValue.year ? ' selected' : ''}>${y}年</option>`);
+      }
+      const monthOptions = [];
+      for (let m = monthRangeForPickerYear.start; m <= monthRangeForPickerYear.end; m += 1) {
+        monthOptions.push(`<option value="${m}"${m === pickerValue.month ? ' selected' : ''}>${String(m).padStart(2, '0')}月</option>`);
+      }
 
       this.shadowRoot.innerHTML = `
         <style>
@@ -387,27 +575,109 @@
             text-align: center;
             font-weight: 600;
           }
+          .month-control {
+            position: relative;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+          }
           .month-trigger {
-            border: none;
-            background: transparent;
-            padding: 0;
+            border: 1px solid #cbd5e1;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            border-radius: 999px;
+            padding: 7px 16px;
             margin: 0;
-            font-size: 18px;
+            min-width: 128px;
+            font-size: 17px;
             font-weight: 600;
             color: #0f172a;
             cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
           }
           .month-trigger:hover {
-            color: #1d4ed8;
+            background: #f8fafc;
+            border-color: #94a3b8;
           }
-          .month-picker {
+          .month-trigger.open {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+          }
+          .month-panel {
             position: absolute;
-            width: 1px;
-            height: 1px;
-            opacity: 0;
-            pointer-events: none;
-            border: 0;
-            padding: 0;
+            top: calc(100% + 10px);
+            left: 50%;
+            transform: translateX(-50%);
+            min-width: 274px;
+            border: 1px solid #dbeafe;
+            border-radius: 14px;
+            padding: 12px;
+            background: #ffffff;
+            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.2);
+            z-index: 20;
+          }
+          .month-panel.hidden {
+            display: none;
+          }
+          .month-fields {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 12px;
+          }
+          .month-select {
+            appearance: none;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            padding: 8px 28px 8px 10px;
+            font-size: 13px;
+            background: #fff;
+            color: #0f172a;
+            cursor: pointer;
+            background-image:
+              linear-gradient(45deg, transparent 50%, #64748b 50%),
+              linear-gradient(135deg, #64748b 50%, transparent 50%);
+            background-position:
+              calc(100% - 14px) calc(50% - 2px),
+              calc(100% - 9px) calc(50% - 2px);
+            background-size: 5px 5px, 5px 5px;
+            background-repeat: no-repeat;
+          }
+          .month-select:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+          }
+          .month-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+          }
+          .month-btn {
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 6px 14px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: border-color 0.2s ease, background 0.2s ease;
+          }
+          .month-btn:hover {
+            background: #f8fafc;
+            border-color: #94a3b8;
+          }
+          .month-btn.primary {
+            border-color: #2563eb;
+            background: #2563eb;
+            color: #fff;
+          }
+          .month-btn.primary:hover {
+            border-color: #1d4ed8;
+            background: #1d4ed8;
           }
           .tools {
             display: flex;
@@ -537,12 +807,20 @@
             .month-text {
               text-align: left;
             }
+            .month-control {
+              align-items: flex-start;
+            }
+            .month-panel {
+              left: 0;
+              transform: none;
+              min-width: min(310px, calc(100vw - 70px));
+            }
             .tools {
               justify-content: flex-start;
             }
           }
         </style>
-        <h2 class="title">${this.state.calendarTitle || '日程'}</h2>
+        ${this.state.showCalendarTitle !== false ? `<h2 class="title">${this.state.calendarTitle || '日程'}</h2>` : ''}
         <div class="wrap">
           <div class="card">
             <div class="head">
@@ -551,8 +829,18 @@
                 <button class="btn" id="next" style="margin-left: 8px;">下一月</button>
               </div>
               <div class="month-text">
-                <button id="monthTrigger" class="month-trigger" type="button">${monthText}</button>
-                <input id="monthPicker" class="month-picker" type="month" value="${this.toMonthInputValue(this.state.current)}" />
+                <div class="month-control">
+                  <button id="monthTrigger" class="month-trigger${this.state.monthPanelOpen ? ' open' : ''}" type="button">${monthText}</button>
+                  <div id="monthPanel" class="month-panel${this.state.monthPanelOpen ? '' : ' hidden'}">
+                    <div class="month-fields">
+                      <select id="monthYear" class="month-select">${yearOptions.join('')}</select>
+                      <select id="monthMonth" class="month-select">${monthOptions.join('')}</select>
+                    </div>
+                    <div class="month-actions">
+                      <button id="monthApply" class="month-btn primary" type="button">确定</button>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div class="tools">
                 <button class="btn" id="today">今天</button>
@@ -586,7 +874,10 @@
       const next = this.shadowRoot.getElementById('next');
       const today = this.shadowRoot.getElementById('today');
       const monthTrigger = this.shadowRoot.getElementById('monthTrigger');
-      const monthPicker = this.shadowRoot.getElementById('monthPicker');
+      const monthPanel = this.shadowRoot.getElementById('monthPanel');
+      const monthYear = this.shadowRoot.getElementById('monthYear');
+      const monthMonth = this.shadowRoot.getElementById('monthMonth');
+      const monthApply = this.shadowRoot.getElementById('monthApply');
       const upcomingReset = this.shadowRoot.getElementById('upcomingReset');
       const calendarPanel = this.shadowRoot.getElementById('calendarPanel');
 
@@ -599,9 +890,41 @@
       if (today) {
         today.onclick = () => this.jumpToDate(todayKey);
       }
-      if (monthTrigger && monthPicker) {
-        monthTrigger.onclick = () => this.openMonthPicker(monthPicker);
-        monthPicker.onchange = () => this.jumpToMonth(monthPicker.value);
+      if (monthTrigger) {
+        monthTrigger.onclick = (e) => {
+          e.stopPropagation();
+          this.toggleMonthPanel();
+        };
+      }
+      if (monthPanel) {
+        monthPanel.onclick = (e) => e.stopPropagation();
+      }
+      if (monthYear && monthMonth) {
+        const updateMonthOptionsByYear = () => {
+          const selectedYear = Number(monthYear.value);
+          const selectedMonth = Number(monthMonth.value);
+          const bounds = this.getMonthRangeBounds();
+          const clamped = this.clampYearMonthToRange(
+            Number.isInteger(selectedYear) ? selectedYear : pickerValue.year,
+            Number.isInteger(selectedMonth) ? selectedMonth : pickerValue.month,
+            bounds,
+          );
+          if (String(clamped.year) !== monthYear.value) {
+            monthYear.value = String(clamped.year);
+          }
+          const monthRange = this.getMonthRangeForYear(clamped.year, bounds);
+          const monthOptionHtml = [];
+          for (let m = monthRange.start; m <= monthRange.end; m += 1) {
+            monthOptionHtml.push(`<option value="${m}">${String(m).padStart(2, '0')}月</option>`);
+          }
+          monthMonth.innerHTML = monthOptionHtml.join('');
+          const nextMonth = Math.min(Math.max(clamped.month, monthRange.start), monthRange.end);
+          monthMonth.value = String(nextMonth);
+        };
+        monthYear.onchange = updateMonthOptionsByYear;
+      }
+      if (monthApply && monthYear && monthMonth) {
+        monthApply.onclick = () => this.applyMonthSelection(monthYear.value, monthMonth.value);
       }
       if (upcomingReset) {
         upcomingReset.onclick = () => this.restoreUpcomingList();

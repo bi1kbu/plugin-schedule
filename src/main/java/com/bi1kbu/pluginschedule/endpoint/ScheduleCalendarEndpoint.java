@@ -34,6 +34,12 @@ public class ScheduleCalendarEndpoint implements CustomEndpoint {
                         ListResult.generateGenericClass(ScheduleCalendar.class)));
                 ScheduleCalendarQuery.buildParameters(builder);
             })
+            .POST("schedulecalendars/{name}/refresh-stats", this::refreshCalendarStats, builder -> {
+                builder.operationId("RefreshScheduleCalendarStats")
+                    .description("Refresh schedule calendar statistics")
+                    .tag(tag)
+                    .response(responseBuilder().implementation(ScheduleCalendar.class));
+            })
             .build();
     }
 
@@ -46,5 +52,12 @@ public class ScheduleCalendarEndpoint implements CustomEndpoint {
         ScheduleCalendarQuery query = new ScheduleCalendarQuery(request.exchange());
         return scheduleCalendarService.listCalendars(query)
             .flatMap(calendars -> ServerResponse.ok().bodyValue(calendars));
+    }
+
+    private Mono<ServerResponse> refreshCalendarStats(ServerRequest request) {
+        String name = request.pathVariable("name");
+        return scheduleCalendarService.refreshCalendarStats(name)
+            .flatMap(calendar -> ServerResponse.ok().bodyValue(calendar))
+            .switchIfEmpty(ServerResponse.notFound().build());
     }
 }

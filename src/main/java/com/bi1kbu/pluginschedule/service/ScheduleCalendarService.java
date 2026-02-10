@@ -7,4 +7,6 @@ import run.halo.app.extension.ListResult;
 
 public interface ScheduleCalendarService {
     Mono<ListResult<ScheduleCalendar>> listCalendars(ScheduleCalendarQuery query);
+
+    Mono<ScheduleCalendar> refreshCalendarStats(String calendarName);
 }

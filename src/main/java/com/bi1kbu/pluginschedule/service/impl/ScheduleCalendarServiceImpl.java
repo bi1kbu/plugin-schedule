@@ -6,10 +6,14 @@ import com.bi1kbu.pluginschedule.ScheduleCalendarQuery;
 import com.bi1kbu.pluginschedule.extension.ScheduleCalendar;
 import com.bi1kbu.pluginschedule.extension.ScheduleEvent;
 import com.bi1kbu.pluginschedule.service.ScheduleCalendarService;
+import java.time.Duration;
+import java.util.List;
+import java.util.regex.Pattern;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.ListResult;
 import run.halo.app.extension.PageRequestImpl;
@@ -17,6 +21,8 @@ import run.halo.app.extension.ReactiveExtensionClient;
 
 @Component
 public class ScheduleCalendarServiceImpl implements ScheduleCalendarService {
+
+    private static final Pattern MONTH_KEY_PATTERN = Pattern.compile("\\d{4}-\\d{2}");
 
     private final ReactiveExtensionClient client;
 
@@ -27,30 +33,74 @@ public class ScheduleCalendarServiceImpl implements ScheduleCalendarService {
     @Override
     public Mono<ListResult<ScheduleCalendar>> listCalendars(ScheduleCalendarQuery query) {
         return client.listBy(
-                ScheduleCalendar.class,
-                query.toListOptions(),
-                PageRequestImpl.of(query.getPage(), query.getSize(), query.getSort())
-            )
-            .flatMap(listResult -> Flux.fromStream(listResult.get())
-                .flatMap(this::populateEventCount)
-                .collectList()
-                .map(items -> new ListResult<>(
-                    listResult.getPage(),
-                    listResult.getSize(),
-                    listResult.getTotal(),
-                    items
-                )));
+            ScheduleCalendar.class,
+            query.toListOptions(),
+            PageRequestImpl.of(query.getPage(), query.getSize(), query.getSort())
+        );
     }
 
-    private Mono<ScheduleCalendar> populateEventCount(ScheduleCalendar calendar) {
+    @Override
+    public Mono<ScheduleCalendar> refreshCalendarStats(String calendarName) {
+        if (StringUtils.isBlank(calendarName)) {
+            return Mono.empty();
+        }
+        return Mono.defer(() -> refreshCalendarStatsOnce(calendarName))
+            .retryWhen(Retry.fixedDelay(2, Duration.ofMillis(100)));
+    }
+
+    private Mono<ScheduleCalendar> refreshCalendarStatsOnce(String calendarName) {
+        return client.fetch(ScheduleCalendar.class, calendarName)
+            .flatMap(calendar -> calculateCalendarStats(calendarName)
+                .flatMap(stats -> {
+                    var status = calendar.getStatusOrDefault();
+                    status.setEventCount(stats.eventCount());
+                    status.setRangeStartMonth(stats.rangeStartMonth());
+                    status.setRangeEndMonth(stats.rangeEndMonth());
+                    return client.update(calendar);
+                }));
+    }
+
+    private Mono<CalendarStats> calculateCalendarStats(String calendarName) {
         var listOptions = ListOptions.builder()
-            .andQuery(equal("spec.calendarName", calendar.getMetadata().getName()))
+            .andQuery(equal("spec.calendarName", calendarName))
             .build();
         return client.listAll(ScheduleEvent.class, listOptions, Sort.unsorted())
-            .count()
-            .map(Long::intValue)
-            .defaultIfEmpty(0)
-            .doOnNext(count -> calendar.getStatusOrDefault().setEventCount(count))
-            .thenReturn(calendar);
+            .collectList()
+            .map(this::calculateStatsFromEvents);
+    }
+
+    private CalendarStats calculateStatsFromEvents(List<ScheduleEvent> events) {
+        String minMonth = null;
+        String maxMonth = null;
+        for (ScheduleEvent event : events) {
+            if (event == null || event.getSpec() == null) {
+                continue;
+            }
+            String monthKey = extractMonthKey(event.getSpec().getStartAt());
+            if (monthKey == null) {
+                continue;
+            }
+            if (minMonth == null || monthKey.compareTo(minMonth) < 0) {
+                minMonth = monthKey;
+            }
+            if (maxMonth == null || monthKey.compareTo(maxMonth) > 0) {
+                maxMonth = monthKey;
+            }
+        }
+        return new CalendarStats(events.size(), minMonth, maxMonth);
+    }
+
+    private String extractMonthKey(String startAt) {
+        if (StringUtils.isBlank(startAt) || startAt.length() < 7) {
+            return null;
+        }
+        String monthKey = startAt.substring(0, 7);
+        if (!MONTH_KEY_PATTERN.matcher(monthKey).matches()) {
+            return null;
+        }
+        return monthKey;
+    }
+
+    private record CalendarStats(int eventCount, String rangeStartMonth, String rangeEndMonth) {
     }
 }

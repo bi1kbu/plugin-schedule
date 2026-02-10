@@ -27,10 +27,6 @@ public class PluginSchedulePlugin extends BasePlugin {
                 .indexFunc(calendar -> Optional.ofNullable(calendar.getSpec())
                     .map(ScheduleCalendar.Spec::getDisplayName)
                     .orElse(null)));
-            indexSpecs.add(IndexSpecs.<ScheduleCalendar, String>single("spec.slug", String.class)
-                .indexFunc(calendar -> Optional.ofNullable(calendar.getSpec())
-                    .map(ScheduleCalendar.Spec::getSlug)
-                    .orElse(null)));
         });
 
         schemeManager.register(ScheduleEvent.class, indexSpecs -> {

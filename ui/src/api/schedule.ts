@@ -26,6 +26,11 @@ export async function deleteCalendar(name: string) {
   await axiosInstance.delete(`${CALENDAR_API}/${name}`)
 }
 
+export async function refreshCalendarStats(name: string) {
+  const { data } = await axiosInstance.post<ScheduleCalendar>(`${PUBLIC_API}/schedulecalendars/${name}/refresh-stats`)
+  return data
+}
+
 export async function listEvents(params: Record<string, any>) {
   const { data } = await axiosInstance.get<ListResult<ScheduleEvent>>(`${PUBLIC_API}/scheduleevents`, { params })
   return data

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { createEvent, deleteEvent, listCalendars, listEvents, listPosts, updateEvent } from '@/api/schedule'
+import { createEvent, deleteEvent, listCalendars, listEvents, listPosts, refreshCalendarStats, updateEvent } from '@/api/schedule'
 import type { Post, ScheduleCalendar, ScheduleEvent } from '@/types'
 import { Dialog, Toast, VButton, VCard } from '@halo-dev/components'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
@@ -20,6 +20,7 @@ const postKeyword = ref('')
 
 const mode = ref<EditMode>('create')
 const editingName = ref('')
+const editingOriginalCalendarName = ref('')
 
 const selectedCalendar = computed(() => (route.query.calendar as string) || '')
 const selectedCalendarDisplayName = computed(() => {
@@ -41,24 +42,65 @@ const form = reactive({
   forceHideHighlight: false,
 })
 
-const formatDateInput = (iso?: string) => {
-  if (!iso) return ''
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) {
-    return iso.slice(0, 16)
+const pad2 = (value: number) => String(value).padStart(2, '0')
+
+const parseDateParts = (value: string): { year: number; month: number; day: number } | null => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) {
+    return null
   }
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000)
-  return local.toISOString().slice(0, 16)
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return null
+  }
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return null
+  }
+  const check = new Date(Date.UTC(year, month - 1, day))
+  if (
+    check.getUTCFullYear() !== year
+    || check.getUTCMonth() !== month - 1
+    || check.getUTCDate() !== day
+  ) {
+    return null
+  }
+  return { year, month, day }
 }
 
-const toIsoString = (value: string) => {
-  if (!value) return ''
-  const date = new Date(value)
+const formatDateInput = (iso?: string) => {
+  if (!iso) return ''
+  const head = iso.slice(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(head)) {
+    return head
+  }
+  const date = new Date(iso)
   if (Number.isNaN(date.getTime())) {
     return ''
   }
-  return date.toISOString()
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`
 }
+
+const toStartOfDayIso = (value: string) => {
+  const parsed = parseDateParts(value)
+  if (!parsed) {
+    return ''
+  }
+  const { year, month, day } = parsed
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0)).toISOString()
+}
+
+const toEndOfDayIso = (value: string) => {
+  const parsed = parseDateParts(value)
+  if (!parsed) {
+    return ''
+  }
+  const { year, month, day } = parsed
+  return new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999)).toISOString()
+}
+
+const displayDate = (value?: string) => formatDateInput(value) || '-'
 
 const detectPostPinned = (post?: Post) => {
   if (!post) return false
@@ -124,6 +166,7 @@ const searchPosts = async () => {
 const resetForm = () => {
   mode.value = 'create'
   editingName.value = ''
+  editingOriginalCalendarName.value = ''
   form.calendarName = selectedCalendar.value || ''
   form.title = ''
   form.startAt = ''
@@ -161,6 +204,15 @@ const onForceHideHighlightChange = () => {
   }
 }
 
+const refreshCalendarStatsForNames = async (calendarNames: string[]) => {
+  const uniqueNames = Array.from(new Set(calendarNames.filter((name) => !!name)))
+  if (uniqueNames.length === 0) {
+    return true
+  }
+  const results = await Promise.allSettled(uniqueNames.map((name) => refreshCalendarStats(name)))
+  return results.every((item) => item.status === 'fulfilled')
+}
+
 const submitForm = async () => {
   if (!form.calendarName) {
     Toast.warning('请选择日历')
@@ -171,17 +223,17 @@ const submitForm = async () => {
     return
   }
   if (!form.startAt) {
-    Toast.warning('开始时间必填')
+    Toast.warning('开始日期必填')
     return
   }
-  const startAtIso = toIsoString(form.startAt)
+  const startAtIso = toStartOfDayIso(form.startAt)
   if (!startAtIso) {
-    Toast.warning('开始时间格式不正确')
+    Toast.warning('开始日期格式不正确')
     return
   }
-  const endAtIso = form.endAt ? toIsoString(form.endAt) : ''
+  const endAtIso = form.endAt ? toEndOfDayIso(form.endAt) : ''
   if (form.endAt && !endAtIso) {
-    Toast.warning('结束时间格式不正确')
+    Toast.warning('结束日期格式不正确')
     return
   }
 
@@ -206,12 +258,21 @@ const submitForm = async () => {
 
   saving.value = true
   try {
+    let statsRefreshed = true
     if (mode.value === 'create') {
       await createEvent(payload)
+      statsRefreshed = await refreshCalendarStatsForNames([form.calendarName])
       Toast.success('事件创建成功')
     } else {
       await updateEvent(editingName.value, payload)
+      statsRefreshed = await refreshCalendarStatsForNames([
+        editingOriginalCalendarName.value,
+        form.calendarName,
+      ])
       Toast.success('事件更新成功')
+    }
+    if (!statsRefreshed) {
+      Toast.warning('事件已保存，但日历统计刷新失败，可稍后重试')
     }
     await fetchEvents()
     resetForm()
@@ -226,6 +287,7 @@ const submitForm = async () => {
 const editOne = (item: ScheduleEvent) => {
   mode.value = 'edit'
   editingName.value = item.metadata.name || ''
+  editingOriginalCalendarName.value = item.spec.calendarName || ''
   form.calendarName = item.spec.calendarName || selectedCalendar.value || ''
   form.title = item.spec.title || ''
   form.startAt = formatDateInput(item.spec.startAt)
@@ -247,7 +309,11 @@ const removeOne = (event: ScheduleEvent) => {
     onConfirm: async () => {
       try {
         await deleteEvent(event.metadata.name || '')
+        const statsRefreshed = await refreshCalendarStatsForNames([event.spec.calendarName || ''])
         Toast.success('删除成功')
+        if (!statsRefreshed) {
+          Toast.warning('事件已删除，但日历统计刷新失败，可稍后重试')
+        }
         await fetchEvents()
         if (editingName.value === (event.metadata.name || '')) {
           resetForm()
@@ -290,7 +356,7 @@ onMounted(async () => {
         <template #header>
           <div class="header-row">
             <div>
-              <strong>事件列表</strong>
+              <div class="card-title">事件列表</div>
               <div class="calendar-tip">当前日历：{{ selectedCalendarDisplayName }}</div>
             </div>
             <div class="actions">
@@ -300,78 +366,85 @@ onMounted(async () => {
           </div>
         </template>
 
-        <table class="table">
-          <thead>
-            <tr>
-              <th>开始时间</th>
-              <th>结束时间</th>
-              <th>标题</th>
-              <th>关联文章</th>
-              <th>突出显示</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="6">加载中...</td>
-            </tr>
-            <tr v-for="item in events" :key="item.metadata.name">
-              <td>{{ item.spec.startAt || '-' }}</td>
-              <td>{{ item.spec.endAt || '-' }}</td>
-              <td>{{ item.spec.title }}</td>
-              <td>{{ item.spec.relatedPostTitleSnapshot || item.spec.relatedPostName || '-' }}</td>
-              <td>{{ renderHighlightMode(item) }}</td>
-              <td class="row-actions">
-                <VButton size="sm" @click="editOne(item)">编辑</VButton>
-                <VButton size="sm" type="danger" @click="removeOne(item)">删除</VButton>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>开始日期</th>
+                <th>结束日期</th>
+                <th>标题</th>
+                <th>关联文章</th>
+                <th>突出显示</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="loading">
+                <td colspan="6">加载中...</td>
+              </tr>
+              <tr v-for="item in events" :key="item.metadata.name">
+                <td>{{ displayDate(item.spec.startAt) }}</td>
+                <td>{{ displayDate(item.spec.endAt) }}</td>
+                <td>{{ item.spec.title }}</td>
+                <td>{{ item.spec.relatedPostTitleSnapshot || item.spec.relatedPostName || '-' }}</td>
+                <td>{{ renderHighlightMode(item) }}</td>
+                <td class="row-actions">
+                  <VButton size="sm" @click="editOne(item)">编辑</VButton>
+                  <VButton size="sm" type="danger" @click="removeOne(item)">删除</VButton>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </VCard>
 
       <VCard>
         <template #header>
-          <strong>{{ mode === 'create' ? '新建事件' : '编辑事件' }}</strong>
+          <div class="card-title">{{ mode === 'create' ? '新建事件' : '编辑事件' }}</div>
         </template>
 
         <div class="form">
-          <label class="field">
-            <span>所属日历</span>
-            <select v-model="form.calendarName">
-              <option v-for="calendar in calendars" :key="calendar.metadata.name" :value="calendar.metadata.name || ''">
-                {{ calendar.spec.displayName }} ({{ calendar.metadata.name }})
-              </option>
-            </select>
-          </label>
+          <div class="section">
+            <div class="section-title">基础信息</div>
+            <div class="form-grid">
+              <label class="field">
+                <span>所属日历</span>
+                <select v-model="form.calendarName">
+                  <option v-for="calendar in calendars" :key="calendar.metadata.name" :value="calendar.metadata.name || ''">
+                    {{ calendar.spec.displayName }} ({{ calendar.metadata.name }})
+                  </option>
+                </select>
+              </label>
 
-          <label class="field">
-            <span>事件标题（必填）</span>
-            <input v-model="form.title" type="text" placeholder="请输入事件标题" />
-          </label>
+              <label class="field">
+                <span>状态</span>
+                <select v-model="form.status">
+                  <option value="published">published</option>
+                  <option value="cancelled">cancelled</option>
+                </select>
+              </label>
 
-          <label class="field">
-            <span>开始时间（必填）</span>
-            <input v-model="form.startAt" type="datetime-local" />
-          </label>
+              <label class="field field-full">
+                <span>事件标题（必填）</span>
+                <input v-model="form.title" type="text" placeholder="请输入事件标题" />
+              </label>
 
-          <label class="field">
-            <span>结束时间（选填）</span>
-            <input v-model="form.endAt" type="datetime-local" />
-          </label>
+              <label class="field">
+                <span>开始日期（必填）</span>
+                <input v-model="form.startAt" type="date" />
+              </label>
 
-          <label class="field">
-            <span>状态</span>
-            <select v-model="form.status">
-              <option value="published">published</option>
-              <option value="cancelled">cancelled</option>
-            </select>
-          </label>
+              <label class="field">
+                <span>结束日期（选填）</span>
+                <input v-model="form.endAt" type="date" />
+              </label>
 
-          <label class="field">
-            <span>摘要</span>
-            <textarea v-model="form.summary" rows="3" placeholder="可选摘要"></textarea>
-          </label>
+              <label class="field field-full">
+                <span>摘要</span>
+                <textarea v-model="form.summary" rows="3" placeholder="可选摘要"></textarea>
+              </label>
+            </div>
+          </div>
 
           <div class="section">
             <div class="section-title">关联文章（手动）</div>
@@ -424,15 +497,21 @@ onMounted(async () => {
 
 .grid {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
 }
 
 .header-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.card-title {
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .calendar-tip {
@@ -446,9 +525,16 @@ onMounted(async () => {
   gap: 8px;
 }
 
+.table-wrap {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: auto;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 760px;
 }
 
 .table th,
@@ -457,6 +543,17 @@ onMounted(async () => {
   border-bottom: 1px solid #e5e7eb;
   padding: 10px;
   vertical-align: top;
+  white-space: nowrap;
+}
+
+.table thead th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 600;
+}
+
+.table tbody tr:hover {
+  background: #f8fafc;
 }
 
 .row-actions {
@@ -467,6 +564,27 @@ onMounted(async () => {
 .form {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+
+.section {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #fafafa;
+}
+
+.section-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -477,6 +595,10 @@ onMounted(async () => {
   font-size: 14px;
 }
 
+.field-full {
+  grid-column: 1 / -1;
+}
+
 .field input,
 .field select,
 .field textarea,
@@ -484,19 +606,7 @@ onMounted(async () => {
   border: 1px solid #d1d5db;
   border-radius: 6px;
   padding: 8px 10px;
-}
-
-.section {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.section-title {
-  font-weight: 600;
+  background: #fff;
 }
 
 .post-search {
@@ -509,6 +619,7 @@ onMounted(async () => {
   border: 1px solid #d1d5db;
   border-radius: 6px;
   padding: 8px 10px;
+  background: #fff;
 }
 
 .post-info {
@@ -536,8 +647,14 @@ onMounted(async () => {
   gap: 8px;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1280px) {
   .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .form-grid {
     grid-template-columns: 1fr;
   }
 }
