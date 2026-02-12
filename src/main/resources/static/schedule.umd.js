@@ -12,7 +12,6 @@
         selectedDay: null,
         calendarTitle: '日程',
         showCalendarTitle: true,
-        wheelLockedUntil: 0,
         upcomingRangeText: '',
         loadedCalendarName: '',
         loadToken: 0,
@@ -693,11 +692,6 @@
 
     onWheel(event) {
       event.preventDefault();
-      const now = Date.now();
-      if (now < this.state.wheelLockedUntil) {
-        return;
-      }
-      this.state.wheelLockedUntil = now + 220;
       if (event.deltaY > 0) {
         this.shiftWeek(1);
       } else if (event.deltaY < 0) {
