@@ -45,7 +45,50 @@ tasks.named('classes') {
     dependsOn tasks.named('processUiResources')
 }
 
+tasks.register('bumpPatchVersion') {
+    group = 'build'
+    description = 'Increment patch version in gradle.properties (x.y.z -> x.y.(z+1)).'
+    doLast {
+        def versionFile = file('gradle.properties')
+        if (!versionFile.exists()) {
+            throw new GradleException("gradle.properties not found: ${versionFile.absolutePath}")
+        }
+
+        def content = versionFile.getText('UTF-8')
+        def matcher = content =~ /(?m)^version\s*=\s*(\d+)\.(\d+)\.(\d+)\s*$/
+        if (!matcher.find()) {
+            throw new GradleException("Cannot parse version from gradle.properties, expected format: version=x.y.z")
+        }
+
+        def major = matcher.group(1) as int
+        def minor = matcher.group(2) as int
+        def patch = matcher.group(3) as int
+        def newVersion = "${major}.${minor}.${patch + 1}".toString()
+
+        def updated = content.replaceFirst(/(?m)^version\s*=\s*\d+\.\d+\.\d+\s*$/, "version=${newVersion}")
+        versionFile.write(updated, 'UTF-8')
+        project.version = newVersion.toString()
+        logger.lifecycle("Version bumped: ${major}.${minor}.${patch} -> ${newVersion}")
+    }
+}
+
+tasks.withType(AbstractArchiveTask).configureEach {
+    doFirst {
+        archiveVersion.set(project.version.toString())
+    }
+}
+
+tasks.register('packagePlugin') {
+    group = 'build'
+    description = 'Bump patch version, then build plugin with the new version.'
+    dependsOn tasks.named('bumpPatchVersion')
+    dependsOn tasks.named('build')
+}
+
+tasks.named('build') {
+    mustRunAfter tasks.named('bumpPatchVersion')
+}
+
 halo {
     version = '2.22'
 }
-

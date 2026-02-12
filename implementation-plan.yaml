@@ -954,3 +954,27 @@
       - "gradlew build 通过"
       - "滚轮行为逻辑变更落地"
     备注: "已完成：执行 `./gradlew.bat build` 成功，前台滚轮逻辑已切换为每次滚轮事件即时触发。"
+
+  - 编号: M79
+    标记: 打包自动化
+    标题: 打包前自动递增版本号
+    状态: 已完成
+    优先级: 高
+    描述: "新增打包任务，在执行构建前自动将 `gradle.properties` 的版本号按补丁位 `+0.0.1`。"
+    交付物:
+      - "新增 `bumpPatchVersion` 任务"
+      - "新增 `packagePlugin` 任务"
+      - "打包顺序为先升版本后构建"
+    备注: "已完成：在 `build.gradle` 中新增 `bumpPatchVersion` 与 `packagePlugin`；`build` 设置 `mustRunAfter bumpPatchVersion`，确保打包时先升版本再构建。"
+
+  - 编号: M80
+    标记: 回归验收
+    标题: 自动升版打包任务验证
+    状态: 已完成
+    优先级: 高
+    描述: "执行自动升版打包任务并确认版本号与产物一致。"
+    交付物:
+      - "`packagePlugin` 执行成功"
+      - "`gradle.properties` 版本号已递增"
+      - "`build/libs` 产物版本匹配"
+    备注: "已完成：执行 `./gradlew.bat packagePlugin` 后版本从 `1.0.5` 升至 `1.0.6`，并生成 `build/libs/plugin-plugin-schedule-1.0.6.jar`。"
