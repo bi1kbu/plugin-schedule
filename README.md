@@ -244,4 +244,4 @@
 
 ## 9. 许可证
 
-[GPL-3.0](./LICENSE) © bi1kbu
+[MIT](./LICENSE) © bi1kbu

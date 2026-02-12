@@ -838,3 +838,27 @@
       - "gradlew build 通过"
       - "计划状态回写完成"
     备注: "已完成：README 主题章节改为可落地方案，新增变量清单与 `.color-scheme-light/.color-scheme-dark/:root[data-color-scheme]` 覆盖示例；`./gradlew.bat build` 构建通过。"
+
+  - 编号: M69
+    标记: 发布元信息
+    标题: License 与版本号更新
+    状态: 已完成
+    优先级: 高
+    描述: "将项目 License 调整为 MIT，并将版本号更新为 1.0.1。"
+    交付物:
+      - "plugin.yaml 许可证改为 MIT"
+      - "项目版本号改为 1.0.1"
+      - "LICENSE 与 README 许可证信息同步"
+    备注: "已完成：`plugin.yaml` 许可证改为 `MIT`，`gradle.properties` 版本更新为 `1.0.1`，并同步更新 `README.md` 许可证说明与 `LICENSE` 文本为 MIT。"
+
+  - 编号: M70
+    标记: 打包
+    标题: 插件重新构建与产物确认
+    状态: 已完成
+    优先级: 高
+    描述: "执行构建并确认 1.0.1 版本插件产物生成。"
+    交付物:
+      - "gradlew build 通过"
+      - "build/libs 产物版本号正确"
+      - "计划状态回写完成"
+    备注: "已完成：执行 `./gradlew.bat clean build` 构建通过；产物已生成 `build/libs/plugin-plugin-schedule-1.0.1.jar`。"
