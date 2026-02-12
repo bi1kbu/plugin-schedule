@@ -790,3 +790,51 @@
       - "版本号递增确认状态已写回"
       - "问题原因与操作步骤沉淀"
     备注: "已完成：`GET /apis/api.schedule.bi1kbu.com/v1alpha1/schedulecalendars` 返回 `status.rangeEndDate`，并观察到 `metadata.version` 从 11 到 12，确认重算落盘已生效。"
+
+  - 编号: M65
+    标记: 文档
+    标题: README 项目介绍与适配说明重写
+    状态: 已完成
+    优先级: 中
+    描述: "重写 README，补齐插件能力、架构、开发运行、配置说明，并提供明暗主题色适配说明。"
+    交付物:
+      - "README 中文重写"
+      - "项目介绍与使用说明完整"
+      - "明暗主题色适配章节"
+    备注: "已完成：重写 `README.md`，补齐项目简介、架构、开发运行、使用方式、统计字段说明，并新增明暗主题色适配章节（含 Shadow DOM 限制说明与 `prefers-color-scheme` 示例）。"
+
+  - 编号: M66
+    标记: 回归验收
+    标题: 文档完整性校验
+    状态: 已完成
+    优先级: 中
+    描述: "校验 README 结构完整性与关键信息覆盖，确保可用于交付和后续维护。"
+    交付物:
+      - "章节结构清晰"
+      - "关键命令可执行"
+      - "主题适配示例可落地"
+    备注: "已完成：校验通过（`README_CHECK:PASS`），已覆盖项目介绍、运行命令、使用说明与明暗主题适配策略；包含 `prefers-color-scheme: dark` 示例与 Shadow DOM 适配约束说明。"
+
+  - 编号: M67
+    标记: 前台样式
+    标题: 日程组件 CSS 变量化与明暗主题切换
+    状态: 已完成
+    优先级: 高
+    描述: "参考评论组件的变量方案，为前台 `schedule-view` 提供可覆盖的 CSS 变量，并支持深色模式自动切换默认值。"
+    交付物:
+      - "schedule.umd.js 样式颜色改为变量驱动"
+      - "提供 light/dark 默认变量"
+      - "主题可通过 CSS 变量覆盖配色"
+    备注: "已完成：`schedule.umd.js` 颜色系统已变量化，新增 `--halo-sw-*` 主题变量；组件内置 light/dark 默认值并通过 `prefers-color-scheme: dark` 自动切换，前台样式可在主题 CSS 中覆盖。"
+
+  - 编号: M68
+    标记: 回归验收
+    标题: 明暗主题适配文档与构建验证
+    状态: 已完成
+    优先级: 高
+    描述: "补充 README 的变量清单与示例，并执行构建验证。"
+    交付物:
+      - "README 增加变量清单和主题切换示例"
+      - "gradlew build 通过"
+      - "计划状态回写完成"
+    备注: "已完成：README 主题章节改为可落地方案，新增变量清单与 `.color-scheme-light/.color-scheme-dark/:root[data-color-scheme]` 覆盖示例；`./gradlew.bat build` 构建通过。"
