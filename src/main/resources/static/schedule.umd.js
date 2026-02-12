@@ -960,6 +960,7 @@
           .btn {
             border: 1px solid var(--sw-muted-2);
             background: var(--sw-surface-1);
+            color: var(--sw-text-1);
             border-radius: 999px;
             padding: 6px 12px;
             cursor: pointer;
@@ -996,6 +997,7 @@
             border: 1px solid var(--sw-muted-1);
             border-radius: var(--sw-base-rounded);
             background: var(--sw-surface-1);
+            color: var(--sw-text-1);
             cursor: pointer;
             font-size: 15px;
           }
