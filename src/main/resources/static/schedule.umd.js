@@ -1114,7 +1114,7 @@
           }
         </style>
         ${this.state.showCalendarTitle !== false ? `<h2 class="title">${this.state.calendarTitle || '日程'}</h2>` : ''}
-        <div class="${wrapClass}">
+        <div class="${wrapClass}" data-widget="schedule" data-widget-style="${this.state.renderStyle || 'default'}">
           <div class="card">
             <div class="head">
               <div>
