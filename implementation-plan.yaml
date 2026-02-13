@@ -861,7 +861,7 @@
       - "gradlew build 通过"
       - "build/libs 产物版本号正确"
       - "计划状态回写完成"
-    备注: "已完成：执行 `./gradlew.bat clean build` 构建通过；产物已生成 `build/libs/plugin-plugin-schedule-1.0.1.jar`。"
+    备注: "已完成：执行 `./gradlew.bat clean build` 构建通过；产物已生成 `build/libs/plugin-schedule-1.0.1.jar`。"
 
   - 编号: M71
     标记: 前台样式修复
@@ -931,7 +931,7 @@
     交付物:
       - "产物文件名确认"
       - "计划状态回写完成"
-    备注: "已完成：产物为 `build/libs/plugin-plugin-schedule-1.0.1.jar`（LastWriteTime: 2026-02-12 22:28:50）；本轮打包状态已回写。"
+    备注: "已完成：产物为 `build/libs/plugin-schedule-1.0.1.jar`（LastWriteTime: 2026-02-12 22:28:50）；本轮打包状态已回写。"
 
   - 编号: M77
     标记: 前台交互优化
@@ -977,4 +977,74 @@
       - "`packagePlugin` 执行成功"
       - "`gradle.properties` 版本号已递增"
       - "`build/libs` 产物版本匹配"
-    备注: "已完成：执行 `./gradlew.bat packagePlugin` 后版本从 `1.0.5` 升至 `1.0.6`，并生成 `build/libs/plugin-plugin-schedule-1.0.6.jar`。"
+    备注: "已完成：执行 `./gradlew.bat packagePlugin` 后版本从 `1.0.5` 升至 `1.0.6`，并生成 `build/libs/plugin-schedule-1.0.6.jar`。"
+
+  - 编号: M81
+    标记: 编辑器增强
+    标题: 日程组件配置区对齐与预览增强
+    状态: 已完成
+    优先级: 高
+    描述: "优化编辑器中日程组件配置区布局，修复下拉对齐问题，并在选择后提供稳定可视预览。"
+    交付物:
+      - "日历下拉与开关区域对齐优化"
+      - "选择日历后展示预览卡片"
+      - "编辑器内不依赖前台 Web Component 的预览可见性"
+    备注: "已完成：`ui/src/editor/ScheduleView.vue` 改为网格对齐布局，新增本地预览壳层（标题+月历区域/近期日程占位）并在选择后立即显示。"
+
+  - 编号: M82
+    标记: 渲染样式
+    标题: 新增渲染样式下拉并接入前台
+    状态: 已完成
+    优先级: 高
+    描述: "新增 `渲染样式` 下拉，支持在组件属性中保存并传递到前台组件，便于后续扩展多样式。"
+    交付物:
+      - "编辑器节点属性新增 renderStyle"
+      - "前台 `schedule-view` 支持 `render-style` 属性"
+      - "提供默认/紧凑两种样式实现"
+    备注: "已完成：`schedule-edited.ts` 新增 `renderStyle` 属性解析和输出；`schedule.umd.js` 新增 `render-style` 观察与 `default/compact` 样式分支；MCP 页面验证已出现“渲染样式”下拉。"
+
+  - 编号: M83
+    标记: 编辑器样式
+    标题: schedule-view-nav 调整为两行布局
+    状态: 已完成
+    优先级: 高
+    描述: "按交互要求将组件配置头部改为两行：第一行显示组件说明与显示标题开关，第二行显示日历/样式选择器。"
+    交付物:
+      - "第一行：左侧“日程组件”，右侧 show-title-switch"
+      - "第二行：日历选择器 + 样式选择器"
+      - "移动端下自动纵向折叠"
+    备注: "已完成：`ui/src/editor/ScheduleView.vue` 重构为 `schedule-view-nav-top` 与 `schedule-view-nav-bottom` 两行结构，并同步更新响应式样式。"
+
+  - 编号: M84
+    标记: 回归验收
+    标题: 两行布局构建验证
+    状态: 已完成
+    优先级: 中
+    描述: "执行构建验证两行排版调整未引入编译回归。"
+    交付物:
+      - "gradlew build 通过"
+      - "编辑器配置区结构更新生效"
+    备注: "已完成：执行 `./gradlew.bat build` 成功，UI 构建与类型检查均通过。"
+
+  - 编号: M85
+    标记: 渲染样式收敛
+    标题: 移除紧凑样式并保留默认选项
+    状态: 已完成
+    优先级: 高
+    描述: "按当前需求移除紧凑样式，仅保留默认样式选项，前台与编辑器行为统一回落默认。"
+    交付物:
+      - "编辑器渲染样式下拉仅保留默认样式"
+      - "节点属性 parse/render 回落默认"
+      - "前台移除 compact 分支样式"
+    备注: "已完成：`ScheduleView.vue` 移除紧凑选项；`schedule-edited.ts` 仅输出默认 render-style；`schedule.umd.js` 固定使用 default 并删除 wrap-compact 样式分支。"
+
+  - 编号: M86
+    标记: 回归验收
+    标题: 样式收敛与页面验证
+    状态: 已完成
+    优先级: 中
+    描述: "构建并通过 MCP 验证渲染样式下拉仅有一个默认选项。"
+    交付物:
+      - "gradlew build 通过"
+      - "MCP 页面验证通过"
+    备注: "已完成：`./gradlew.bat build` 成功；MCP 编辑页快照显示“渲染样式”下拉仅剩 `默认样式` 一个选项。"

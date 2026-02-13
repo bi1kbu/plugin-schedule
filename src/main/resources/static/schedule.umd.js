@@ -12,6 +12,7 @@
         selectedDay: null,
         calendarTitle: '日程',
         showCalendarTitle: true,
+        renderStyle: 'default',
         upcomingRangeText: '',
         loadedCalendarName: '',
         loadToken: 0,
@@ -27,7 +28,7 @@
     }
 
     static get observedAttributes() {
-      return ['calendar-name', 'show-title'];
+      return ['calendar-name', 'show-title', 'render-style'];
     }
 
     connectedCallback() {
@@ -46,6 +47,11 @@
         this.render();
         return;
       }
+      if (name === 'render-style' && oldValue !== newValue) {
+        this.state.renderStyle = this.resolveRenderStyleFromAttr();
+        this.render();
+        return;
+      }
       if (name === 'calendar-name' && oldValue !== newValue) {
         this.state.selectedDay = null;
         this.state.panelEvents = [];
@@ -61,6 +67,10 @@
       }
       const normalized = String(raw).trim().toLowerCase();
       return !['false', '0', 'off', 'no'].includes(normalized);
+    }
+
+    resolveRenderStyleFromAttr() {
+      return 'default';
     }
 
     formatDateKey(date) {
@@ -421,6 +431,7 @@
     async loadData() {
       const calendarName = this.getAttribute('calendar-name');
       this.state.showCalendarTitle = this.resolveShowTitleFromAttr();
+      this.state.renderStyle = this.resolveRenderStyleFromAttr();
       if (!calendarName) {
         const currentMonth = this.formatMonthKey(this.state.current);
         this.state.events = [];
@@ -735,6 +746,7 @@
       }
 
       const monthText = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const wrapClass = 'wrap';
       const monthValue = month + 1;
       const todayKey = this.formatDateKey(new Date());
       const monthRangeBounds = this.getMonthRangeBounds();
@@ -1102,7 +1114,7 @@
           }
         </style>
         ${this.state.showCalendarTitle !== false ? `<h2 class="title">${this.state.calendarTitle || '日程'}</h2>` : ''}
-        <div class="wrap">
+        <div class="${wrapClass}">
           <div class="card">
             <div class="head">
               <div>

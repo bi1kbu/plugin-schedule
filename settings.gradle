@@ -3,5 +3,5 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
-rootProject.name = 'plugin-plugin-schedule'
+rootProject.name = 'plugin-schedule'
 include 'ui'

@@ -13,7 +13,7 @@ spec:
   repo: https://github.com/bi1kbu/plugin-schedule
   issues: https://github.com/bi1kbu/plugin-schedule/issues
   displayName: "日程"
-  description: "为 Halo 提供可插入文章/页面的日程日历组件，并支持后台配置与文章关联。"
+  description: "为 Halo 提供可插入文章/页面的日程日历组件，并支持后台配置与文章关联，由机魂社（MSIEFA.ORG）开发"
   license:
     - name: "MIT"
       url: "https://github.com/bi1kbu/plugin-schedule/blob/main/LICENSE"

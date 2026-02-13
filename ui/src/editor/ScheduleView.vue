@@ -1,10 +1,19 @@
 <script setup lang="ts">
 import { NodeViewWrapper, type NodeViewProps } from '@halo-dev/richtext-editor'
 import { VEmpty } from '@halo-dev/components'
-import { computed, h } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import RiCalendarScheduleLine from '~icons/ri/calendar-schedule-line'
 
 const props = defineProps<NodeViewProps>()
+type RenderStyle = 'default'
+
+interface CalendarOption {
+  value: string
+  label: string
+}
+
+const calendarOptions = ref<CalendarOption[]>([])
+const calendarLoading = ref(false)
 
 const calendarName = computed({
   get: () => (props.node?.attrs.calendarName as string) || '',
@@ -20,59 +29,89 @@ const showTitle = computed({
   },
 })
 
-const previewComponent = computed(() => {
-  if (!calendarName.value) {
-    return null
-  }
-  return h('schedule-view', {
-    'calendar-name': calendarName.value,
-    'show-title': showTitle.value ? 'true' : 'false',
-  })
+const renderStyle = computed({
+  get: () => 'default' as RenderStyle,
+  set: (_value: RenderStyle) => {
+    props.updateAttributes({ renderStyle: 'default' })
+  },
 })
 
-const previewKey = computed(() => `${calendarName.value}-${showTitle.value ? '1' : '0'}`)
+const selectedCalendarLabel = computed(() => {
+  const matched = calendarOptions.value.find((item) => item.value === calendarName.value)
+  return matched?.label || calendarName.value || ''
+})
+
+const renderStyleOptions: Array<{ value: RenderStyle; label: string }> = [
+  { value: 'default', label: '默认样式' },
+]
+
+async function loadCalendars() {
+  calendarLoading.value = true
+  try {
+    const resp = await fetch('/apis/api.schedule.bi1kbu.com/v1alpha1/schedulecalendars?page=1&size=500')
+    if (!resp.ok) {
+      throw new Error(`Load calendars failed: ${resp.status}`)
+    }
+    const json = await resp.json()
+    calendarOptions.value = (json?.items || []).map((item: any) => ({
+      value: item?.metadata?.name || '',
+      label: item?.spec?.displayName || item?.metadata?.name || '',
+    })).filter((item: CalendarOption) => Boolean(item.value))
+  } catch (error) {
+    console.error(error)
+  } finally {
+    calendarLoading.value = false
+  }
+}
+
+onMounted(() => {
+  loadCalendars()
+})
 </script>
 
 <template>
   <NodeViewWrapper as="div" :class="['schedule-view-container', { 'schedule-view-container--selected': selected }]">
     <div class="schedule-view-nav">
-      <div class="schedule-view-nav-start">
-        <RiCalendarScheduleLine class="icon" />
-        <span>日程组件</span>
-      </div>
-      <div class="schedule-view-nav-end">
-        <FormKit
-          v-model="calendarName"
-          type="select"
-          name="calendarName"
-          :multiple="false"
-          clearable
-          searchable
-          placeholder="请选择日历"
-          action="/apis/api.schedule.bi1kbu.com/v1alpha1/schedulecalendars"
-          :request-option="{
-            method: 'GET',
-            pageField: 'page',
-            sizeField: 'size',
-            totalField: 'total',
-            itemsField: 'items',
-            labelField: 'spec.displayName',
-            valueField: 'metadata.name',
-          }"
-          :classes="{
-            wrapper: 'schedule-calendar-select-wrapper',
-            input: 'schedule-calendar-select-input',
-          }"
-        />
+      <div class="schedule-view-nav-top">
+        <div class="schedule-view-nav-start">
+          <RiCalendarScheduleLine class="icon" />
+          <span>日程组件</span>
+        </div>
 
         <label class="show-title-switch">
           <input v-model="showTitle" type="checkbox" />
           <span>前台显示日历名称</span>
         </label>
       </div>
+      <div class="schedule-view-nav-bottom">
+        <label class="field-group">
+          <span class="field-label">日历选择</span>
+          <select v-model="calendarName" class="field-select">
+            <option value="">{{ calendarLoading ? '加载中...' : '请选择日历' }}</option>
+            <option v-for="item in calendarOptions" :key="item.value" :value="item.value">
+              {{ item.label }}
+            </option>
+          </select>
+        </label>
+
+        <label class="field-group">
+          <span class="field-label">渲染样式</span>
+          <select v-model="renderStyle" class="field-select">
+            <option v-for="item in renderStyleOptions" :key="item.value" :value="item.value">
+              {{ item.label }}
+            </option>
+          </select>
+        </label>
+      </div>
     </div>
     <div class="schedule-view-preview">
-      <component v-if="calendarName" :is="previewComponent" :key="previewKey" />
+      <div v-if="calendarName" :class="['preview-shell', `preview-shell--${renderStyle}`]">
+        <div v-if="showTitle" class="preview-title">{{ selectedCalendarLabel || '日程' }}</div>
+        <div class="preview-content">
+          <div class="preview-calendar">月历区域预览</div>
+          <div class="preview-upcoming">近期日程预览</div>
+        </div>
+      </div>
       <VEmpty v-else title="未选择日历" message="请在上方选择一个日历" />
     </div>
   </NodeViewWrapper>
@@ -98,13 +137,20 @@ const previewKey = computed(() => `${calendarName.value}-${showTitle.value ? '1'
 .schedule-view-nav {
   border-bottom: 1px solid #e5e7eb;
   display: flex;
+  flex-direction: column;
   padding: 6px 10px;
-  align-items: center;
+  align-items: stretch;
   gap: 8px;
 }
 
+.schedule-view-nav-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .schedule-view-nav-start {
-  flex: 1;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -116,29 +162,71 @@ const previewKey = computed(() => `${calendarName.value}-${showTitle.value ? '1'
   height: 16px;
 }
 
-.schedule-view-nav-end {
-  min-width: 260px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.schedule-view-nav-bottom {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px);
+  align-items: stretch;
+  gap: 10px;
 }
 
 .schedule-view-preview {
   padding: 8px 10px;
   background: transparent;
-  min-height: 86px;
+  min-height: 120px;
 }
 
-.schedule-view-preview schedule-view {
-  display: block;
+.field-group {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.schedule-calendar-select-wrapper {
-  min-width: 220px;
+.field-label {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1;
 }
 
-.schedule-calendar-select-input {
-  font-size: 14px;
+.field-select {
+  min-height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.preview-shell {
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 10px;
+}
+
+.preview-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+.preview-content {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 10px;
+}
+
+.preview-calendar,
+.preview-upcoming {
+  min-height: 64px;
+  border: 1px dashed #93c5fd;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2563eb;
+  font-size: 12px;
 }
 
 .show-title-switch {
@@ -148,5 +236,21 @@ const previewKey = computed(() => `${calendarName.value}-${showTitle.value ? '1'
   color: #334155;
   font-size: 12px;
   white-space: nowrap;
+}
+
+@media (max-width: 1000px) {
+  .schedule-view-nav {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .schedule-view-nav-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .schedule-view-nav-bottom {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
