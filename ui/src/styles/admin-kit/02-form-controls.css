@@ -1,0 +1,73 @@
+/*
+  Usage: form controls and grid layout.
+  Scenario: create/update forms, rules editor, filter form rows.
+*/
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.grid.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.page :is(input:not([type='checkbox']), select, textarea) {
+  border: 1px solid #c3d2e8 !important;
+  border-radius: 10px !important;
+  padding: 0 13px !important;
+  font-size: 14px;
+  background: var(--ak-bg-soft) !important;
+  color: var(--ak-text) !important;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  box-shadow: none !important;
+}
+
+.page :is(input:not([type='checkbox']), select) {
+  height: 44px !important;
+  min-height: 44px !important;
+  line-height: 42px !important;
+}
+
+.page textarea {
+  min-height: 120px;
+  padding: 10px 12px !important;
+  line-height: 1.4;
+}
+
+.page input[type='number'] {
+  appearance: textfield;
+}
+
+.page :is(input:not([type='checkbox']), select, textarea):focus {
+  outline: none;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14) !important;
+}
+
+.page input[readonly] {
+  background: #f1f5f9 !important;
+  border-color: #d1d9e6 !important;
+  color: #475569 !important;
+}
+
+.checkbox {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 24px;
+}
+
+.grid > label.field-full {
+  grid-column: 1 / -1;
+}

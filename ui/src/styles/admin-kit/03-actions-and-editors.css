@@ -1,0 +1,162 @@
+/*
+  Usage: buttons, chips and editor blocks.
+  Scenario: relation selector, post picker, option list editor, CRUD action area.
+*/
+.actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
+}
+
+button {
+  border: 1px solid var(--ak-primary);
+  border-radius: 10px;
+  background: var(--ak-primary);
+  color: #fff;
+  padding: 9px 15px;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+button.small {
+  padding: 6px 11px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+button.danger {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+button.danger:hover:not(:disabled) {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+.relation-picker,
+.post-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.post-picker input {
+  grid-column: 1 / -1;
+}
+
+.post-picker select,
+.relation-picker select {
+  min-width: 0;
+}
+
+.post-picker button.small {
+  min-width: 72px;
+  height: 44px;
+  line-height: 1;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+}
+
+.relation-picker button.small {
+  min-width: 56px;
+  height: 44px;
+  line-height: 1;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+}
+
+.chips {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #bcd2ff;
+  background: #eaf2ff;
+  color: #87a3ff;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.chip-remove {
+  border: 0;
+  background: transparent;
+  color: #87a3ff;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
+.option-editor-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 14px 0;
+}
+
+.option-editor {
+  border: 1px solid #d9e1ee;
+  border-radius: 12px;
+  padding: 14px;
+  background: #fafcff;
+}
+
+.option-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.option-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ak-text);
+}
+
+.option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.option-row {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr auto;
+  gap: 8px;
+}
+
+.page .option-row input {
+  height: 30px !important;
+  min-height: 30px !important;
+  line-height: 28px !important;
+  padding: 0 10px !important;
+  font-size: 13px !important;
+}

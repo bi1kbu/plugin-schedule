@@ -1,0 +1,28 @@
+/*
+  Usage: responsive adaptation for mobile and narrow screens.
+  Scenario: same component set reused on plugin console pages.
+*/
+@media (max-width: 1000px) {
+  .grid,
+  .grid.compact,
+  .option-editor-wrap {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-row {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-title {
+    line-height: 1.4;
+  }
+
+  .option-row,
+  .post-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .grid > label.field-full {
+    grid-column: auto;
+  }
+}

@@ -1,0 +1,136 @@
+/*
+  Usage: list/filter/table blocks.
+  Scenario: ledger list, log list, query and audit pages.
+*/
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--ak-border-soft);
+  text-align: left;
+  padding: 11px 8px;
+  font-size: 13px;
+}
+
+th {
+  font-weight: 700;
+  color: #334155;
+  background: #f8fafc;
+}
+
+td {
+  color: var(--ak-text);
+}
+
+.simple-table-row,
+.ledger-main-row,
+.log-main-row {
+  cursor: pointer;
+}
+
+.simple-table-row:hover,
+.ledger-main-row:hover td,
+.log-main-row:hover td {
+  background: #f8fbff;
+}
+
+.simple-table-row.active {
+  background: #edf4ff;
+}
+
+.filter-panel {
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px dashed var(--ak-border);
+  border-radius: 12px;
+  background: #fbfdff;
+}
+
+.filter-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  margin-bottom: 10px;
+}
+
+.filter-row:last-child {
+  margin-bottom: 0;
+}
+
+.filter-title {
+  font-size: 13px;
+  line-height: 32px;
+  color: #334155;
+  font-weight: 700;
+}
+
+.filter-values {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+.filter-pill {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  border-radius: 9px;
+  height: 32px;
+  line-height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+
+.filter-pill:hover {
+  border-color: #9bb8e9;
+  background: #d6e2fcff;
+}
+
+.filter-pill.active {
+  background: var(--ak-primary-soft);
+  border-color: #8db5ff;
+  color: #1e40af;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.1);
+}
+
+.filter-pill.expand {
+  background: #f6f8fc;
+  border-color: #d4dbe8;
+  color: #334155;
+}
+
+.ledger-filter {
+  margin-bottom: 12px;
+}
+
+.log-filter-inputs,
+.ledger-filter-inputs {
+  margin-bottom: 12px;
+}
+
+.log-filter-actions,
+.ledger-filter-actions {
+  display: flex;
+  align-items: flex-end;
+}
+
+.log-filter-actions button.small,
+.ledger-filter-actions button.small {
+  height: 44px;
+  min-height: 44px;
+  padding: 0 16px;
+}

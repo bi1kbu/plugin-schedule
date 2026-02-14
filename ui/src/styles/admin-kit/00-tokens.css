@@ -1,0 +1,15 @@
+/*
+  Usage: global UI tokens for Halo console plugin pages.
+  Scope: place container class `.page` at root, then use CSS variables below.
+*/
+.page {
+  --ak-text: #0f172a;
+  --ak-muted: #475569;
+  --ak-subtle: #64748b;
+  --ak-border: #d7dfeb;
+  --ak-border-soft: #e2e8f0;
+  --ak-primary: #2563eb;
+  --ak-primary-soft: #e9f1ff;
+  --ak-bg-card: #ffffff;
+  --ak-bg-soft: #f8fbff;
+}

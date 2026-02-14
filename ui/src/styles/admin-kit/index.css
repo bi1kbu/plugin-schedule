@@ -1,0 +1,8 @@
+/* Admin UI style kit entry for Halo plugins */
+@import './00-tokens.css';
+@import './01-layout.css';
+@import './02-form-controls.css';
+@import './03-actions-and-editors.css';
+@import './04-table-and-filter.css';
+@import './05-detail-and-pagination.css';
+@import './90-responsive.css';
