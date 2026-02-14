@@ -4,6 +4,7 @@ import { VLoading } from '@halo-dev/components'
 import RiCalendarLine from '~icons/ri/calendar-line'
 import RiCalendarTodoLine from '~icons/ri/calendar-todo-line'
 import RiCalendarScheduleLine from '~icons/ri/calendar-schedule-line'
+import RiFileList3Line from '~icons/ri/file-list-3-line'
 import { ScheduleExtension } from '@/editor'
 
 const buildScheduleRoute = (nameSuffix = '') => ({
@@ -60,6 +61,24 @@ const buildScheduleRoute = (nameSuffix = '') => ({
             name: '日程管理',
             icon: markRaw(RiCalendarTodoLine),
             priority: 20,
+          },
+        },
+      },
+      {
+        path: 'logs',
+        name: `ScheduleLogs${nameSuffix}`,
+        component: defineAsyncComponent({
+          loader: () => import('@/views/ScheduleLogsView.vue'),
+          loadingComponent: VLoading,
+        }),
+        meta: {
+          title: '操作日志',
+          searchable: true,
+          permissions: ['plugin:schedule:read'],
+          menu: {
+            name: '操作日志',
+            icon: markRaw(RiFileList3Line),
+            priority: 30,
           },
         },
       },

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { createEvent, deleteEvent, getPost, listCalendars, listEvents, listPosts, refreshCalendarStats, updateEvent } from '@/api/schedule'
+import { createEvent, deleteEvent, getPost, listCalendars, listEvents, listPosts, recordScheduleLog, refreshCalendarStats, updateEvent } from '@/api/schedule'
 import type { Post, ScheduleCalendar, ScheduleEvent } from '@/types'
 import { Dialog, Toast, VButton, VCard } from '@halo-dev/components'
 import { utils } from '@halo-dev/ui-shared'
@@ -17,6 +17,25 @@ interface SessionCreatedEvent {
   endAt?: string
   createdAt: string
   highlightMode: string
+}
+
+interface ScheduleLogDetail {
+  field: string
+  label: string
+  oldValue?: string
+  newValue?: string
+}
+
+interface EventLogSnapshot {
+  calendarDisplayName: string
+  title: string
+  startDate: string
+  endDate: string
+  relatedPostTitle: string
+  relatedPostPermalink: string
+  relatedPostPinned: string
+  highlightMode: string
+  summary: string
 }
 
 const route = useRoute()
@@ -37,6 +56,7 @@ const mode = ref<EditMode>('create')
 const editingName = ref('')
 const editingVersion = ref<number | undefined>(undefined)
 const editingOriginalCalendarName = ref('')
+const editingOriginalSnapshot = ref<EventLogSnapshot | null>(null)
 
 const selectedCalendar = computed(() => (route.query.calendar as string) || '')
 
@@ -45,6 +65,7 @@ const activeTab = computed<EventsTab>(() => {
   return tab === 'create' ? 'create' : 'list'
 })
 const canEdit = computed(() => hasPermission(['plugin:schedule:edit']))
+const canWriteLog = computed(() => hasPermission(['plugin:schedule:log-write']))
 
 const filters = reactive({
   keyword: '',
@@ -126,6 +147,7 @@ const toEndOfDayIso = (value: string) => {
 }
 
 const displayDate = (value?: string) => formatDateInput(value) || '-'
+const normalizeText = (value?: string) => (value && value.trim() ? value.trim() : '-')
 
 const resolvePostPinnedSnapshot = (post?: Post): boolean | undefined => {
   if (!post) return undefined
@@ -264,15 +286,44 @@ const onCalendarSelect = async (event: Event) => {
   await changeSelectedCalendar(value)
 }
 
+const getNewestCalendarName = () => {
+  if (calendars.value.length === 0) {
+    return ''
+  }
+  const newestCalendar = [...calendars.value].sort((a, b) => {
+    const timeA = Date.parse(a.metadata.creationTimestamp || '')
+    const timeB = Date.parse(b.metadata.creationTimestamp || '')
+    if (!Number.isNaN(timeA) && !Number.isNaN(timeB)) {
+      return timeB - timeA
+    }
+    if (!Number.isNaN(timeA)) {
+      return -1
+    }
+    if (!Number.isNaN(timeB)) {
+      return 1
+    }
+    return 0
+  })[0]
+  return newestCalendar?.metadata.name || ''
+}
+
+const ensureSelectedCalendar = async () => {
+  const selected = selectedCalendar.value
+  const hasSelected = calendars.value.some((item) => (item.metadata.name || '') === selected)
+  if (selected && hasSelected) {
+    return
+  }
+  const fallback = getNewestCalendarName()
+  if (!fallback) {
+    return
+  }
+  await changeSelectedCalendar(fallback)
+}
+
 const fetchCalendars = async () => {
   const data = await listCalendars(1, 200)
   calendars.value = data.items || []
-
-  const selected = selectedCalendar.value
-  const hasSelected = calendars.value.some((item) => (item.metadata.name || '') === selected)
-  if ((!selected || !hasSelected) && calendars.value.length > 0) {
-    await changeSelectedCalendar(calendars.value[0].metadata.name || '')
-  }
+  await ensureSelectedCalendar()
 }
 
 const fetchEvents = async () => {
@@ -328,6 +379,7 @@ const resetForm = () => {
   editingName.value = ''
   editingVersion.value = undefined
   editingOriginalCalendarName.value = ''
+  editingOriginalSnapshot.value = null
 
   form.title = ''
   form.startAt = ''
@@ -396,6 +448,71 @@ const renderHighlightMode = (event: ScheduleEvent) => {
   return '跟随文章置顶(否/未知)'
 }
 
+const renderHighlightModeBySpec = (spec: ScheduleEvent['spec']) => {
+  if (spec.forceHighlight === true) return '强制突出'
+  if (spec.forceHideHighlight === true) return '强制不突出'
+  if (spec.relatedPostPinnedSnapshot === true) return '跟随文章置顶(是)'
+  return '跟随文章置顶(否/未知)'
+}
+
+const toSnapshotFromEvent = (event: ScheduleEvent): EventLogSnapshot => ({
+  calendarDisplayName: getCalendarDisplayName(event.spec.calendarName || ''),
+  title: normalizeText(event.spec.title),
+  startDate: displayDate(event.spec.startAt),
+  endDate: displayDate(event.spec.endAt),
+  relatedPostTitle: normalizeText(event.spec.relatedPostTitleSnapshot || event.spec.relatedPostName),
+  relatedPostPermalink: normalizeText(event.spec.relatedPostPermalinkSnapshot),
+  relatedPostPinned: event.spec.relatedPostPinnedSnapshot === true ? '是' : '否/未知',
+  highlightMode: renderHighlightModeBySpec(event.spec),
+  summary: normalizeText(event.spec.summary),
+})
+
+const toSnapshotFromSpec = (spec: ScheduleEvent['spec'], calendarName: string): EventLogSnapshot => ({
+  calendarDisplayName: getCalendarDisplayName(calendarName),
+  title: normalizeText(spec.title),
+  startDate: displayDate(spec.startAt),
+  endDate: displayDate(spec.endAt),
+  relatedPostTitle: normalizeText(spec.relatedPostTitleSnapshot || spec.relatedPostName),
+  relatedPostPermalink: normalizeText(spec.relatedPostPermalinkSnapshot),
+  relatedPostPinned: spec.relatedPostPinnedSnapshot === true ? '是' : '否/未知',
+  highlightMode: renderHighlightModeBySpec(spec),
+  summary: normalizeText(spec.summary),
+})
+
+const emptySnapshot = (): EventLogSnapshot => ({
+  calendarDisplayName: '-',
+  title: '-',
+  startDate: '-',
+  endDate: '-',
+  relatedPostTitle: '-',
+  relatedPostPermalink: '-',
+  relatedPostPinned: '-',
+  highlightMode: '-',
+  summary: '-',
+})
+
+const diffSnapshots = (before: EventLogSnapshot, after: EventLogSnapshot): ScheduleLogDetail[] => {
+  const fields: Array<{ key: keyof EventLogSnapshot; label: string; field: string }> = [
+    { key: 'calendarDisplayName', label: '所属日历', field: 'calendarDisplayName' },
+    { key: 'title', label: '事件标题', field: 'title' },
+    { key: 'startDate', label: '开始日期', field: 'startAt' },
+    { key: 'endDate', label: '结束日期', field: 'endAt' },
+    { key: 'relatedPostTitle', label: '关联文章标题', field: 'relatedPostTitle' },
+    { key: 'relatedPostPermalink', label: '关联文章链接', field: 'relatedPostPermalink' },
+    { key: 'relatedPostPinned', label: '置顶快照', field: 'relatedPostPinnedSnapshot' },
+    { key: 'highlightMode', label: '突出显示规则', field: 'highlightMode' },
+    { key: 'summary', label: '摘要', field: 'summary' },
+  ]
+  return fields
+    .filter((item) => before[item.key] !== after[item.key])
+    .map((item) => ({
+      field: item.field,
+      label: item.label,
+      oldValue: before[item.key],
+      newValue: after[item.key],
+    }))
+}
+
 const getEventStartDateKey = (event: ScheduleEvent) => {
   const dateKey = formatDateInput(event.spec.startAt)
   return /^\d{4}-\d{2}-\d{2}$/.test(dateKey) ? dateKey : ''
@@ -459,6 +576,25 @@ const appendSessionCreatedEvent = (event: ScheduleEvent) => {
     highlightMode: renderHighlightMode(event),
   }
   sessionCreatedEvents.value.unshift(record)
+}
+
+const writeEventLog = async (payload: {
+  actionType: string
+  eventName?: string
+  eventTitle?: string
+  calendarName?: string
+  keyword?: string
+  summary?: string
+  details?: ScheduleLogDetail[]
+}) => {
+  if (!canWriteLog.value) {
+    return
+  }
+  try {
+    await recordScheduleLog(payload)
+  } catch (e) {
+    console.error('record schedule log failed', e)
+  }
 }
 
 const submitForm = async () => {
@@ -528,10 +664,31 @@ const submitForm = async () => {
     if (mode.value === 'create') {
       const created = await createEvent(payload)
       appendSessionCreatedEvent(created)
+      const createDetails = diffSnapshots(emptySnapshot(), toSnapshotFromEvent(created))
+      await writeEventLog({
+        actionType: '创建日程',
+        eventName: created.metadata.name || '',
+        eventTitle: created.spec.title || '',
+        calendarName: created.spec.calendarName || targetCalendarName,
+        keyword: created.spec.title || '',
+        summary: '创建了新的日程事件',
+        details: createDetails,
+      })
       statsRefreshed = await refreshCalendarStatsForNames([targetCalendarName])
       Toast.success('事件创建成功')
     } else {
+      const previousSnapshot = editingOriginalSnapshot.value || emptySnapshot()
+      const currentSnapshot = toSnapshotFromSpec(payload.spec, targetCalendarName)
       await updateEvent(editingName.value, payload)
+      await writeEventLog({
+        actionType: '更新日程',
+        eventName: editingName.value,
+        eventTitle: payload.spec.title || '',
+        calendarName: targetCalendarName,
+        keyword: payload.spec.title || '',
+        summary: '更新了日程事件信息',
+        details: diffSnapshots(previousSnapshot, currentSnapshot),
+      })
       statsRefreshed = await refreshCalendarStatsForNames([
         editingOriginalCalendarName.value,
         targetCalendarName,
@@ -562,6 +719,7 @@ const editOne = (item: ScheduleEvent) => {
   editingName.value = item.metadata.name || ''
   editingVersion.value = item.metadata.version
   editingOriginalCalendarName.value = item.spec.calendarName || ''
+  editingOriginalSnapshot.value = toSnapshotFromEvent(item)
 
   form.title = item.spec.title || ''
   form.startAt = formatDateInput(item.spec.startAt)
@@ -591,6 +749,16 @@ const removeOne = (event: ScheduleEvent) => {
     onConfirm: async () => {
       try {
         await deleteEvent(event.metadata.name || '')
+        const deleteDetails = diffSnapshots(toSnapshotFromEvent(event), emptySnapshot())
+        await writeEventLog({
+          actionType: '删除日程',
+          eventName: event.metadata.name || '',
+          eventTitle: event.spec.title || '',
+          calendarName: event.spec.calendarName || '',
+          keyword: event.spec.title || '',
+          summary: '删除了日程事件',
+          details: deleteDetails,
+        })
         const statsRefreshed = await refreshCalendarStatsForNames([event.spec.calendarName || ''])
         Toast.success('删除成功')
         if (!statsRefreshed) {
@@ -611,6 +779,13 @@ const removeOne = (event: ScheduleEvent) => {
 watch(
   () => selectedCalendar.value,
   async () => {
+    if (!selectedCalendar.value) {
+      await ensureSelectedCalendar()
+      if (!selectedCalendar.value) {
+        await fetchEvents()
+      }
+      return
+    }
     await fetchEvents()
   }
 )
@@ -627,7 +802,7 @@ function hasPermission(permissions: string[]) {
   try {
     return utils.permission.has(permissions, true)
   } catch {
-    return true
+    return false
   }
 }
 </script>

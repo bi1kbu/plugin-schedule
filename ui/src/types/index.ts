@@ -45,6 +45,28 @@ export interface ScheduleEvent {
   }
 }
 
+export interface ScheduleLog {
+  apiVersion: string
+  kind: string
+  metadata: Metadata
+  spec: {
+    actionType: string
+    operator: string
+    actionAt: string
+    calendarName?: string
+    eventName?: string
+    eventTitle?: string
+    keyword?: string
+    summary?: string
+    details?: Array<{
+      field: string
+      label: string
+      oldValue?: string
+      newValue?: string
+    }>
+  }
+}
+
 export interface ListResult<T> {
   total: number
   page: number

@@ -12,6 +12,9 @@ rules:
   - apiGroups: ["core.halo.run", "schedule.bi1kbu.com"]
     resources: ["schedulecalendars", "scheduleevents"]
     verbs: ["get", "list"]
+  - apiGroups: ["core.halo.run", "api.schedule.bi1kbu.com", "schedule.bi1kbu.com"]
+    resources: ["schedulelogs"]
+    verbs: ["get", "list"]
 ---
 apiVersion: v1alpha1
 kind: Role
@@ -21,7 +24,7 @@ metadata:
     halo.run/role-template: "true"
   annotations:
     rbac.authorization.halo.run/dependencies: '["role-template-schedule-view"]'
-    rbac.authorization.halo.run/ui-permissions: '["plugin:schedule:edit"]'
+    rbac.authorization.halo.run/ui-permissions: '["plugin:schedule:edit","plugin:schedule:log-write"]'
     rbac.authorization.halo.run/module: "日程"
     rbac.authorization.halo.run/display-name: "日程编辑"
 rules:
@@ -29,8 +32,17 @@ rules:
     resources: ["scheduleevents"]
     verbs: ["create", "patch", "update", "delete", "deletecollection"]
   - apiGroups: ["api.schedule.bi1kbu.com", "schedule.bi1kbu.com"]
+    resources: ["schedulelogs"]
+    verbs: ["create"]
+  - apiGroups: ["api.schedule.bi1kbu.com", "schedule.bi1kbu.com"]
+    resources: ["schedulelogs/record"]
+    verbs: ["create"]
+  - apiGroups: ["api.schedule.bi1kbu.com", "schedule.bi1kbu.com"]
     resources: ["schedulecalendars"]
-    verbs: ["get", "list", "patch", "update"]
+    verbs: ["get", "list", "create", "patch", "update"]
+  - apiGroups: ["api.schedule.bi1kbu.com", "schedule.bi1kbu.com"]
+    resources: ["schedulecalendars/refresh-stats"]
+    verbs: ["create"]
 ---
 apiVersion: v1alpha1
 kind: Role

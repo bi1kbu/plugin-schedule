@@ -1,5 +1,5 @@
 import { axiosInstance } from '@halo-dev/api-client'
-import type { ListResult, Post, ScheduleCalendar, ScheduleEvent } from '@/types'
+import type { ListResult, Post, ScheduleCalendar, ScheduleEvent, ScheduleLog } from '@/types'
 
 const CALENDAR_API = '/apis/schedule.bi1kbu.com/v1alpha1/schedulecalendars'
 const EVENT_API = '/apis/schedule.bi1kbu.com/v1alpha1/scheduleevents'
@@ -64,5 +64,28 @@ export async function listPosts(keyword = '') {
 
 export async function getPost(name: string) {
   const { data } = await axiosInstance.get<Post>(`/apis/content.halo.run/v1alpha1/posts/${name}`)
+  return data
+}
+
+export async function listScheduleLogs(params: Record<string, any>) {
+  const { data } = await axiosInstance.get<ListResult<ScheduleLog>>(`${PUBLIC_API}/schedulelogs`, { params })
+  return data
+}
+
+export async function recordScheduleLog(payload: {
+  actionType: string
+  calendarName?: string
+  eventName?: string
+  eventTitle?: string
+  keyword?: string
+  summary?: string
+  details?: Array<{
+    field: string
+    label: string
+    oldValue?: string
+    newValue?: string
+  }>
+}) {
+  const { data } = await axiosInstance.post<ScheduleLog>(`${PUBLIC_API}/schedulelogs`, payload)
   return data
 }
