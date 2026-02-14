@@ -6,69 +6,70 @@ import RiCalendarTodoLine from '~icons/ri/calendar-todo-line'
 import RiCalendarScheduleLine from '~icons/ri/calendar-schedule-line'
 import { ScheduleExtension } from '@/editor'
 
-export default definePlugin({
-  routes: [
-    {
-      parentName: 'Root',
-      route: {
-        path: '/schedule',
-        name: 'ScheduleRoot',
-        redirect: '/schedule/events',
+const buildScheduleRoute = (nameSuffix = '') => ({
+  parentName: 'Root',
+  route: {
+    path: '/schedule',
+    name: `ScheduleRoot${nameSuffix}`,
+    redirect: '/schedule/events',
+    component: defineAsyncComponent({
+      loader: () => import('@/views/ScheduleLayoutView.vue'),
+      loadingComponent: VLoading,
+    }),
+    meta: {
+      title: '日程',
+      permissions: ['plugin:schedule:read'],
+      menu: {
+        name: '日程',
+        group: 'content',
+        icon: markRaw(RiCalendarScheduleLine),
+        priority: 8,
+      },
+    },
+    children: [
+      {
+        path: 'calendars',
+        name: `ScheduleCalendars${nameSuffix}`,
         component: defineAsyncComponent({
-          loader: () => import('@/views/ScheduleLayoutView.vue'),
+          loader: () => import('@/views/ScheduleCalendarsView.vue'),
           loadingComponent: VLoading,
         }),
         meta: {
-          title: '日程',
-          permissions: ['plugin:schedule:view'],
+          title: '日历配置',
+          searchable: true,
+          permissions: ['plugin:schedule:calendar-manage'],
           menu: {
-            name: '日程',
-            group: 'content',
-            icon: markRaw(RiCalendarScheduleLine),
-            priority: 8,
+            name: '日历配置',
+            icon: markRaw(RiCalendarLine),
+            priority: 10,
           },
         },
-        children: [
-          {
-            path: 'calendars',
-            name: 'ScheduleCalendars',
-            component: defineAsyncComponent({
-              loader: () => import('@/views/ScheduleCalendarsView.vue'),
-              loadingComponent: VLoading,
-            }),
-            meta: {
-              title: '日历配置',
-              searchable: true,
-              permissions: ['plugin:schedule:view'],
-              menu: {
-                name: '日历配置',
-                icon: markRaw(RiCalendarLine),
-                priority: 10,
-              },
-            },
-          },
-          {
-            path: 'events',
-            name: 'ScheduleEvents',
-            component: defineAsyncComponent({
-              loader: () => import('@/views/ScheduleEventsView.vue'),
-              loadingComponent: VLoading,
-            }),
-            meta: {
-              title: '日程管理',
-              searchable: true,
-              permissions: ['plugin:schedule:view'],
-              menu: {
-                name: '日程管理',
-                icon: markRaw(RiCalendarTodoLine),
-                priority: 20,
-              },
-            },
-          },
-        ],
       },
-    },
-  ],
+      {
+        path: 'events',
+        name: `ScheduleEvents${nameSuffix}`,
+        component: defineAsyncComponent({
+          loader: () => import('@/views/ScheduleEventsView.vue'),
+          loadingComponent: VLoading,
+        }),
+        meta: {
+          title: '日程管理',
+          searchable: true,
+          permissions: ['plugin:schedule:read'],
+          menu: {
+            name: '日程管理',
+            icon: markRaw(RiCalendarTodoLine),
+            priority: 20,
+          },
+        },
+      },
+    ],
+  },
+})
+
+export default definePlugin({
+  routes: [buildScheduleRoute('')],
+  ucRoutes: [buildScheduleRoute('UC')],
   extensionPoints: {
     'default:editor:extension:create': () => {
       return [ScheduleExtension]

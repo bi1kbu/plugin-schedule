@@ -2,6 +2,7 @@
 import { createEvent, deleteEvent, getPost, listCalendars, listEvents, listPosts, refreshCalendarStats, updateEvent } from '@/api/schedule'
 import type { Post, ScheduleCalendar, ScheduleEvent } from '@/types'
 import { Dialog, Toast, VButton, VCard } from '@halo-dev/components'
+import { utils } from '@halo-dev/ui-shared'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -43,6 +44,7 @@ const activeTab = computed<EventsTab>(() => {
   const tab = route.query.tab as string
   return tab === 'create' ? 'create' : 'list'
 })
+const canEdit = computed(() => hasPermission(['plugin:schedule:edit']))
 
 const filters = reactive({
   keyword: '',
@@ -194,6 +196,16 @@ const syncRelatedPostSnapshot = async (options: { forceRemote?: boolean; silent?
 
 const ensureTabQuery = async () => {
   const tab = route.query.tab as string
+  if (!canEdit.value && tab === 'create') {
+    await router.replace({
+      path: route.path,
+      query: {
+        ...route.query,
+        tab: 'list',
+      },
+    })
+    return
+  }
   if (tab === 'list' || tab === 'create') {
     return
   }
@@ -224,6 +236,10 @@ const openListTab = () => {
 }
 
 const openCreateTab = () => {
+  if (!canEdit.value) {
+    Toast.warning('当前账号没有日程编辑权限')
+    return
+  }
   if (mode.value === 'edit') {
     resetForm()
   }
@@ -446,6 +462,10 @@ const appendSessionCreatedEvent = (event: ScheduleEvent) => {
 }
 
 const submitForm = async () => {
+  if (!canEdit.value) {
+    Toast.warning('当前账号没有日程编辑权限')
+    return
+  }
   const targetCalendarName = selectedCalendar.value
   if (!targetCalendarName) {
     Toast.warning('请先在右上角选择当前日历')
@@ -534,6 +554,10 @@ const submitForm = async () => {
 }
 
 const editOne = (item: ScheduleEvent) => {
+  if (!canEdit.value) {
+    Toast.warning('当前账号没有日程编辑权限')
+    return
+  }
   mode.value = 'edit'
   editingName.value = item.metadata.name || ''
   editingVersion.value = item.metadata.version
@@ -556,6 +580,10 @@ const editOne = (item: ScheduleEvent) => {
 }
 
 const removeOne = (event: ScheduleEvent) => {
+  if (!canEdit.value) {
+    Toast.warning('当前账号没有日程编辑权限')
+    return
+  }
   Dialog.warning({
     title: '确认删除该事件？',
     description: '删除后无法恢复。',
@@ -594,6 +622,14 @@ onMounted(async () => {
   await searchPosts()
   resetForm()
 })
+
+function hasPermission(permissions: string[]) {
+  try {
+    return utils.permission.has(permissions, true)
+  } catch {
+    return true
+  }
+}
 </script>
 
 <template>
@@ -609,6 +645,7 @@ onMounted(async () => {
           日程清单
         </button>
         <button
+          v-if="canEdit"
           type="button"
           class="subnav-btn"
           :class="{ active: activeTab === 'create' }"
@@ -619,6 +656,7 @@ onMounted(async () => {
       </div>
 
       <div class="subnav-right">
+        <span v-if="!canEdit" class="readonly-flag">只读模式</span>
         <label class="calendar-label" for="eventCalendarSelect">当前日历</label>
         <select
           id="eventCalendarSelect"
@@ -699,8 +737,11 @@ onMounted(async () => {
                 <td>{{ item.spec.relatedPostTitleSnapshot || item.spec.relatedPostName || '-' }}</td>
                 <td>{{ renderHighlightMode(item) }}</td>
                 <td class="row-actions">
-                  <VButton size="sm" @click="editOne(item)">编辑</VButton>
-                  <VButton size="sm" type="danger" @click="removeOne(item)">删除</VButton>
+                  <template v-if="canEdit">
+                    <VButton size="sm" @click="editOne(item)">编辑</VButton>
+                    <VButton size="sm" type="danger" @click="removeOne(item)">删除</VButton>
+                  </template>
+                  <span v-else class="readonly-tip">只读</span>
                 </td>
               </tr>
             </tbody>
@@ -709,7 +750,7 @@ onMounted(async () => {
       </VCard>
     </div>
 
-    <div v-else class="panel-stack create-stack">
+    <div v-else-if="canEdit" class="panel-stack create-stack">
       <VCard>
         <template #header>
           <div class="header-row">
@@ -824,6 +865,18 @@ onMounted(async () => {
         </div>
       </VCard>
     </div>
+    <div v-else class="panel-stack">
+      <VCard>
+        <template #header>
+          <div class="header-row">
+            <div class="card-title">新建日程</div>
+          </div>
+        </template>
+        <div class="readonly-block">
+          当前账号仅有日程只读权限，无法新建或编辑日程。
+        </div>
+      </VCard>
+    </div>
   </div>
 </template>
 
@@ -880,6 +933,11 @@ onMounted(async () => {
   padding: 6px 10px;
   font-size: 14px;
   color: #111827;
+}
+
+.readonly-flag {
+  font-size: 12px;
+  color: #6b7280;
 }
 
 .panel-stack {
@@ -960,6 +1018,12 @@ onMounted(async () => {
 .row-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.readonly-tip {
+  font-size: 12px;
+  color: #6b7280;
 }
 
 .form {
@@ -1051,6 +1115,12 @@ onMounted(async () => {
 .form-actions {
   display: flex;
   gap: 8px;
+}
+
+.readonly-block {
+  font-size: 13px;
+  color: #6b7280;
+  padding: 8px 2px;
 }
 
 @media (max-width: 1280px) {

@@ -2,13 +2,15 @@
 import { createCalendar, deleteCalendar, listCalendars, updateCalendar } from '@/api/schedule'
 import type { ScheduleCalendar } from '@/types'
 import { Dialog, Toast, VButton, VCard } from '@halo-dev/components'
-import { onMounted, reactive, ref } from 'vue'
+import { utils } from '@halo-dev/ui-shared'
+import { computed, onMounted, reactive, ref } from 'vue'
 
 type EditMode = 'create' | 'edit'
 
 const calendars = ref<ScheduleCalendar[]>([])
 const loading = ref(false)
 const saving = ref(false)
+const canCalendarManage = computed(() => hasPermission(['plugin:schedule:calendar-manage']))
 
 const mode = ref<EditMode>('create')
 const editingName = ref('')
@@ -94,6 +96,10 @@ const submitForm = async () => {
 }
 
 const removeOne = (calendar: ScheduleCalendar) => {
+  if (!canCalendarManage.value) {
+    Toast.warning('当前账号没有日历管理权限')
+    return
+  }
   Dialog.warning({
     title: '确认删除该日历？',
     description: '删除后无法恢复。',
@@ -115,6 +121,14 @@ const removeOne = (calendar: ScheduleCalendar) => {
 }
 
 onMounted(fetchCalendars)
+
+function hasPermission(permissions: string[]) {
+  try {
+    return utils.permission.has(permissions, true)
+  } catch {
+    return true
+  }
+}
 </script>
 
 <template>
@@ -129,7 +143,7 @@ onMounted(fetchCalendars)
             </div>
             <div class="header-actions">
               <VButton @click="fetchCalendars">刷新</VButton>
-              <VButton type="primary" @click="resetForm">新建日历</VButton>
+              <VButton v-if="canCalendarManage" type="primary" @click="resetForm">新建日历</VButton>
             </div>
           </div>
         </template>
@@ -156,8 +170,11 @@ onMounted(fetchCalendars)
                 <td>{{ item.status?.eventCount || 0 }}</td>
                 <td>{{ getRangeText(item) }}</td>
                 <td class="row-actions">
-                  <VButton size="sm" @click="editOne(item)">编辑</VButton>
-                  <VButton size="sm" type="danger" @click="removeOne(item)">删除</VButton>
+                  <template v-if="canCalendarManage">
+                    <VButton size="sm" @click="editOne(item)">编辑</VButton>
+                    <VButton size="sm" type="danger" @click="removeOne(item)">删除</VButton>
+                  </template>
+                  <span v-else class="readonly-tip">只读</span>
                 </td>
               </tr>
             </tbody>
@@ -165,7 +182,7 @@ onMounted(fetchCalendars)
         </div>
       </VCard>
 
-      <VCard>
+      <VCard v-if="canCalendarManage">
         <template #header>
           <div class="header-row">
             <div class="card-title">{{ mode === 'create' ? '新建日历' : '编辑日历' }}</div>
@@ -278,6 +295,12 @@ onMounted(fetchCalendars)
 .row-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.readonly-tip {
+  font-size: 12px;
+  color: #6b7280;
 }
 
 .form {
