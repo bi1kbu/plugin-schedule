@@ -15,6 +15,7 @@ const canCalendarManage = computed(() => hasPermission(['plugin:schedule:calenda
 const mode = ref<EditMode>('create')
 const editingName = ref('')
 const editingVersion = ref<number | undefined>(undefined)
+const showFormCard = ref(false)
 
 const form = reactive({
   displayName: '',
@@ -45,11 +46,16 @@ const fetchCalendars = async () => {
   }
 }
 
-const resetForm = () => {
+const resetForm = (options?: { keepVisible?: boolean }) => {
   mode.value = 'create'
   editingName.value = ''
   editingVersion.value = undefined
   form.displayName = ''
+  showFormCard.value = options?.keepVisible ?? false
+}
+
+const openCreateForm = () => {
+  resetForm({ keepVisible: true })
 }
 
 const editOne = (calendar: ScheduleCalendar) => {
@@ -57,6 +63,7 @@ const editOne = (calendar: ScheduleCalendar) => {
   editingName.value = calendar.metadata.name || ''
   editingVersion.value = calendar.metadata.version
   form.displayName = calendar.spec.displayName || ''
+  showFormCard.value = true
 }
 
 const submitForm = async () => {
@@ -133,8 +140,8 @@ function hasPermission(permissions: string[]) {
 
 <template>
   <div class="page">
-    <div class="grid">
-      <VCard>
+    <div class="calendar-layout">
+      <VCard class="card">
         <template #header>
           <div class="header-row">
             <div>
@@ -143,7 +150,7 @@ function hasPermission(permissions: string[]) {
             </div>
             <div class="header-actions">
               <VButton @click="fetchCalendars">刷新</VButton>
-              <VButton v-if="canCalendarManage" type="primary" @click="resetForm">新建日历</VButton>
+              <VButton v-if="canCalendarManage" type="primary" @click="openCreateForm">新建日历</VButton>
             </div>
           </div>
         </template>
@@ -182,7 +189,7 @@ function hasPermission(permissions: string[]) {
         </div>
       </VCard>
 
-      <VCard v-if="canCalendarManage">
+      <VCard v-if="canCalendarManage && showFormCard" class="card">
         <template #header>
           <div class="header-row">
             <div class="card-title">{{ mode === 'create' ? '新建日历' : '编辑日历' }}</div>
@@ -202,7 +209,7 @@ function hasPermission(permissions: string[]) {
             <VButton :loading="saving" type="primary" @click="submitForm">
               {{ mode === 'create' ? '创建' : '保存' }}
             </VButton>
-            <VButton @click="resetForm">重置</VButton>
+            <VButton @click="resetForm({ keepVisible: true })">重置</VButton>
           </div>
         </div>
       </VCard>
@@ -211,142 +218,5 @@ function hasPermission(permissions: string[]) {
 </template>
 
 <style scoped>
-.page {
-  padding-top: 12px;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  gap: 14px;
-  align-items: start;
-}
-
-.header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 4px 2px 16px;
-}
-
-.header-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.card-title {
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.5;
-  margin: 2px 0;
-  display: inline-flex;
-  align-items: center;
-}
-
-.card-desc {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.table-wrap {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  overflow: auto;
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 620px;
-}
-
-.table th,
-.table td {
-  text-align: left;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 10px;
-  vertical-align: top;
-  white-space: nowrap;
-}
-
-.table thead th {
-  background: #f8fafc;
-  color: #475569;
-  font-weight: 600;
-}
-
-.table tbody tr:hover {
-  background: #f8fafc;
-}
-
-.calendar-name {
-  font-weight: 600;
-}
-
-.calendar-meta {
-  font-size: 12px;
-  color: #6b7280;
-  margin-top: 4px;
-}
-
-.row-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.readonly-tip {
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.section {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: #fafafa;
-}
-
-.section-title {
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 14px;
-}
-
-.field input,
-.field select {
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  padding: 8px 10px;
-  background: #fff;
-}
-
-.form-actions {
-  display: flex;
-  gap: 8px;
-}
-
-@media (max-width: 1200px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
-}
+@import '../styles/admin-kit/index.css';
 </style>

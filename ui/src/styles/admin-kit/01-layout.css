@@ -97,3 +97,38 @@
 .mono {
   font-family: Consolas, 'Courier New', monospace;
 }
+
+.calendar-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card-title {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.35;
+  font-weight: 700;
+  color: var(--ak-text);
+}
+
+.card-desc {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--ak-subtle);
+}
+
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}

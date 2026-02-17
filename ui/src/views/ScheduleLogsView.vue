@@ -25,6 +25,28 @@ const pageCount = computed(() => {
   return count > 0 ? count : 1
 })
 
+const actionTypeOptions = computed(() => {
+  const fromLogs = logs.value
+    .map((item) => item.spec.actionType || '')
+    .filter((item) => !!item)
+  const set = new Set(fromLogs)
+  if (filters.actionType) {
+    set.add(filters.actionType)
+  }
+  return Array.from(set)
+})
+
+const operatorOptions = computed(() => {
+  const fromLogs = logs.value
+    .map((item) => item.spec.operator || '')
+    .filter((item) => !!item)
+  const set = new Set(fromLogs)
+  if (filters.operator) {
+    set.add(filters.operator)
+  }
+  return Array.from(set)
+})
+
 const fetchLogs = async () => {
   loading.value = true
   try {
@@ -64,6 +86,22 @@ const resetFilters = async () => {
   filters.toDate = ''
   page.value = 1
   await fetchLogs()
+}
+
+const setActionType = async (value: string) => {
+  if (filters.actionType === value) {
+    return
+  }
+  filters.actionType = value
+  await applyFilters()
+}
+
+const setOperator = async (value: string) => {
+  if (filters.operator === value) {
+    return
+  }
+  filters.operator = value
+  await applyFilters()
 }
 
 const prevPage = async () => {
@@ -126,40 +164,64 @@ onMounted(async () => {
       </template>
 
       <div class="filters-wrap">
-        <div class="filters-grid">
-          <label class="field">
-            <span>操作类型</span>
-            <select v-model="filters.actionType">
-              <option value="">全部</option>
-              <option value="创建日程">创建日程</option>
-              <option value="更新日程">更新日程</option>
-              <option value="删除日程">删除日程</option>
-            </select>
-          </label>
+        <div class="filter-panel">
+          <div class="filter-row">
+            <div class="filter-title">操作类型</div>
+            <div class="filter-values">
+              <button class="filter-pill" :class="{ active: !filters.actionType }" type="button" @click="setActionType('')">
+                全部
+              </button>
+              <button
+                v-for="item in actionTypeOptions"
+                :key="`action-${item}`"
+                class="filter-pill"
+                :class="{ active: filters.actionType === item }"
+                type="button"
+                @click="setActionType(item)"
+              >
+                {{ item }}
+              </button>
+            </div>
+          </div>
 
-          <label class="field">
-            <span>操作人</span>
-            <input v-model="filters.operator" type="text" placeholder="输入操作人" />
-          </label>
+          <div class="filter-row">
+            <div class="filter-title">操作人</div>
+            <div class="filter-values">
+              <button class="filter-pill" :class="{ active: !filters.operator }" type="button" @click="setOperator('')">
+                全部
+              </button>
+              <button
+                v-for="item in operatorOptions"
+                :key="`operator-${item}`"
+                class="filter-pill"
+                :class="{ active: filters.operator === item }"
+                type="button"
+                @click="setOperator(item)"
+              >
+                {{ item }}
+              </button>
+            </div>
+          </div>
+        </div>
 
+        <div class="logs-input-grid">
           <label class="field">
-            <span>标题关键词</span>
-            <input v-model="filters.keyword" type="text" placeholder="输入标题关键字" />
+            <span>关键词</span>
+            <input v-model="filters.keyword" type="text" placeholder="输入编号关键字" @keyup.enter="applyFilters" />
           </label>
 
           <label class="field">
             <span>开始日期</span>
-            <input v-model="filters.fromDate" type="date" />
+            <input v-model="filters.fromDate" type="date" @change="applyFilters" />
           </label>
 
           <label class="field">
             <span>结束日期</span>
-            <input v-model="filters.toDate" type="date" />
+            <input v-model="filters.toDate" type="date" @change="applyFilters" />
           </label>
         </div>
 
-        <div class="filter-actions">
-          <VButton type="primary" :loading="loading" @click="applyFilters">查询</VButton>
+        <div class="filter-actions logs-filter-actions">
           <VButton @click="resetFilters">重置筛选</VButton>
         </div>
       </div>
@@ -183,17 +245,17 @@ onMounted(async () => {
               <td colspan="5">暂无日志</td>
             </tr>
             <template v-for="item in logs" :key="item.metadata.name">
-              <tr class="log-row" @click="toggleExpand(item)">
+              <tr class="log-main-row" :class="{ expanded: isExpanded(item) }" @click="toggleExpand(item)">
                 <td>{{ item.spec.actionType || '-' }}</td>
                 <td>{{ item.spec.eventTitle || item.spec.keyword || '-' }}</td>
                 <td>{{ item.spec.operator || '-' }}</td>
                 <td>{{ formatDateTime(item.spec.actionAt) }}</td>
                 <td>{{ item.spec.summary || '-' }}</td>
               </tr>
-              <tr v-if="isExpanded(item)" class="detail-row">
+              <tr v-if="isExpanded(item)" class="log-detail-row">
                 <td colspan="5">
-                  <div v-if="hasDetails(item)" class="detail-table-wrap">
-                    <table class="detail-table">
+                  <div v-if="hasDetails(item)" class="log-detail-wrap">
+                    <table class="log-detail-table">
                       <thead>
                         <tr>
                           <th>字段</th>
@@ -210,7 +272,7 @@ onMounted(async () => {
                       </tbody>
                     </table>
                   </div>
-                  <div v-else class="no-details">暂无字段级明细</div>
+                  <div v-else class="log-detail-empty">暂无字段级明细</div>
                 </td>
               </tr>
             </template>
@@ -238,169 +300,10 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.page {
-  padding-top: 12px;
-}
+@import '../styles/admin-kit/index.css';
 
 .header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 4px 2px 8px;
-}
-
-.card-title {
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.5;
-  margin: 2px 0;
-  display: inline-flex;
-  align-items: center;
-}
-
-.filters-wrap {
-  border: 1px dashed #d1d5db;
-  border-radius: 10px;
-  padding: 12px;
-  margin-bottom: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.filters-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 14px;
-}
-
-.field input,
-.field select {
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  background: #fff;
-  min-height: 40px;
-  padding: 8px 10px;
-}
-
-.filter-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.table-wrap {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  overflow: auto;
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 720px;
-}
-
-.table th,
-.table td {
-  text-align: left;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 10px;
-  vertical-align: top;
-  white-space: nowrap;
-}
-
-.table thead th {
-  background: #f8fafc;
-  color: #475569;
-  font-weight: 600;
-}
-
-.table tbody tr:hover {
-  background: #f8fafc;
-}
-
-.log-row {
-  cursor: pointer;
-}
-
-.detail-row {
-  background: #f8fafc;
-}
-
-.detail-table-wrap {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  overflow: auto;
-}
-
-.detail-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.detail-table th,
-.detail-table td {
-  text-align: left;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 8px 10px;
-  vertical-align: top;
-  white-space: normal;
-}
-
-.detail-table thead th {
-  background: #eef2ff;
-  color: #334155;
-  font-weight: 600;
-}
-
-.no-details {
-  color: #64748b;
-  padding: 8px 4px;
-}
-
-.pager {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 12px;
-  gap: 12px;
-}
-
-.pager-right {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pager-right select {
-  min-width: 72px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 4px 8px;
-}
-
-@media (max-width: 1280px) {
-  .filters-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 768px) {
-  .filters-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .pager {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+  margin-top: 20px;
+  margin-left: 20px;
 }
 </style>

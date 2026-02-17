@@ -1257,3 +1257,50 @@
       - "日志展开交互验证通过"
       - "计划状态回写完成"
     备注: "已完成：执行 `./gradlew.bat build` 通过（含后端编译、UI type-check 与构建）；日志明细数据结构与展开渲染链路已联通。"
+
+  - 编号: M107
+    标记: 样式治理
+    标题: 后台页面样式切换至 admin-kit
+    状态: 已完成
+    优先级: 高
+    描述: "移除后台页面自定义样式，统一套用 `ui/src/styles/admin-kit` 样式体系（layout 相关除外）。"
+    交付物:
+      - "日历配置/日程管理/操作日志页面移除本地样式"
+      - "统一引入 admin-kit 样式入口"
+    备注: "已完成：`ScheduleCalendarsView/ScheduleEventsView/ScheduleLogsView` 均移除页面内自定义样式，统一改为 `@import '../styles/admin-kit/index.css'`；`ScheduleLayoutView` 按约定保持不变。"
+
+  - 编号: M108
+    标记: 回归验收
+    标题: admin-kit 样式切换构建验证
+    状态: 已完成
+    优先级: 中
+    描述: "验证后台页面样式切换后构建通过且页面可加载。"
+    交付物:
+      - "gradlew build 通过"
+      - "后台页面可访问"
+      - "计划状态回写完成"
+    备注: "已完成：执行 `./gradlew.bat build` 构建通过（含 UI type-check 与 rsbuild），样式切换后可正常产出 Jar。"
+
+  - 编号: M109
+    标记: 样式修复
+    标题: 日历配置页面布局修复
+    状态: 已完成
+    优先级: 高
+    描述: "修复 `ScheduleCalendarsView` 在 admin-kit 下布局错乱问题，统一为后台卡片双栏结构。"
+    交付物:
+      - "页面主布局恢复为双栏"
+      - "标题区/表单区/操作区样式稳定"
+      - "不新增页面内私有样式"
+    备注: "已完成：将 `ScheduleCalendarsView` 外层布局从误用的 `.grid` 调整为 `.calendar-layout`，并补齐 `header-row/card-title/card-desc/header-actions/form/section/form-actions/calendar-meta/row-actions` 等 admin-kit 语义样式。"
+
+  - 编号: M110
+    标记: 回归验收
+    标题: 日历配置布局修复构建验证
+    状态: 已完成
+    优先级: 中
+    描述: "执行构建并确认日历配置页面布局修复后可正常加载。"
+    交付物:
+      - "gradlew build 通过"
+      - "页面布局恢复正常"
+      - "计划状态回写完成"
+    备注: "已完成：执行 `./gradlew.bat build` 通过，日历配置页布局修复改动编译无回归。"

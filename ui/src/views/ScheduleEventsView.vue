@@ -832,19 +832,21 @@ function hasPermission(permissions: string[]) {
 
       <div class="subnav-right">
         <span v-if="!canEdit" class="readonly-flag">只读模式</span>
-        <label class="calendar-label" for="eventCalendarSelect">当前日历</label>
-        <select
-          id="eventCalendarSelect"
-          class="calendar-select"
-          :value="selectedCalendar"
-          :disabled="calendars.length === 0"
-          @change="onCalendarSelect"
-        >
-          <option v-if="calendars.length === 0" value="">暂无日历</option>
-          <option v-for="calendar in calendars" :key="calendar.metadata.name" :value="calendar.metadata.name || ''">
-            {{ calendar.spec.displayName }}
-          </option>
-        </select>
+        <div class="calendar-picker">
+          <label class="calendar-label" for="eventCalendarSelect">当前日历</label>
+          <select
+            id="eventCalendarSelect"
+            class="calendar-select"
+            :value="selectedCalendar"
+            :disabled="calendars.length === 0"
+            @change="onCalendarSelect"
+          >
+            <option v-if="calendars.length === 0" value="">暂无日历</option>
+            <option v-for="calendar in calendars" :key="calendar.metadata.name" :value="calendar.metadata.name || ''">
+              {{ calendar.spec.displayName }}
+            </option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -1056,277 +1058,10 @@ function hasPermission(permissions: string[]) {
 </template>
 
 <style scoped>
-.page {
-  padding-top: 12px;
-}
-
-.event-subnav {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-}
-
-.subnav-left {
-  display: flex;
-  gap: 8px;
-}
-
-.subnav-btn {
-  border: 1px solid #d1d5db;
-  background: #fff;
-  border-radius: 8px;
-  padding: 6px 12px;
-  cursor: pointer;
-  color: #374151;
-}
-
-.subnav-btn.active {
-  border-color: #2563eb;
-  color: #1d4ed8;
-  background: #eff6ff;
-}
-
-.subnav-right {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.calendar-label {
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.calendar-select {
-  min-width: 220px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  background: #fff;
-  padding: 6px 10px;
-  font-size: 14px;
-  color: #111827;
-}
-
-.readonly-flag {
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.panel-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.create-stack {
-  gap: 12px;
-}
+@import '../styles/admin-kit/index.css';
 
 .header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 4px 2px 8px;
-}
-
-.card-title {
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.5;
-  margin: 2px 0;
-  display: inline-flex;
-  align-items: center;
-}
-
-.card-desc {
-  color: #6b7280;
-  font-size: 12px;
-  margin-top: 4px;
-}
-
-.list-filters {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.table-wrap {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  overflow: auto;
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 760px;
-}
-
-.table th,
-.table td {
-  text-align: left;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 10px;
-  vertical-align: top;
-  white-space: nowrap;
-}
-
-.table thead th {
-  background: #f8fafc;
-  color: #475569;
-  font-weight: 600;
-}
-
-.table tbody tr:hover {
-  background: #f8fafc;
-}
-
-.temp-table {
-  min-width: 840px;
-}
-
-.row-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.readonly-tip {
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.section {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: #fafafa;
-}
-
-.section-title {
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 14px;
-}
-
-.field-full {
-  grid-column: 1 / -1;
-}
-
-.field input,
-.field select,
-.field textarea,
-.section select {
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  padding: 8px 10px;
-  background: #fff;
-}
-
-.filter-actions {
-  display: flex;
-  align-items: flex-end;
-}
-
-.post-search {
-  display: flex;
-  gap: 8px;
-}
-
-.post-search input {
-  flex: 1;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  padding: 8px 10px;
-  background: #fff;
-}
-
-.post-info {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.checkbox-field {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.rule-tip {
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.form-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.readonly-block {
-  font-size: 13px;
-  color: #6b7280;
-  padding: 8px 2px;
-}
-
-@media (max-width: 1280px) {
-  .list-filters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .table {
-    min-width: 680px;
-  }
-
-  .temp-table {
-    min-width: 760px;
-  }
-}
-
-@media (max-width: 768px) {
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .list-filters {
-    grid-template-columns: 1fr;
-  }
-
-  .subnav-right {
-    width: 100%;
-  }
-
-  .calendar-select {
-    width: 100%;
-  }
+  margin-top: 20px;
+  margin-left: 20px;
 }
 </style>

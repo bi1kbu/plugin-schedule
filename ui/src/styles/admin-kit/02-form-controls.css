@@ -71,3 +71,27 @@ label {
 .grid > label.field-full {
   grid-column: 1 / -1;
 }
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #334155;
+}
+
+label.field > span {
+  font-size: 13px;
+  line-height: 1.4;
+}
